@@ -32,6 +32,13 @@
 // decoding still works because the engine uses the same value. (Not a secret.)
 #define AHKW_SCRIPT_SEED 0x9E3779B97F4A7C15ULL
 
+// MSVC: these static helpers are intentionally included by two translation units each of which
+// uses only some of them; silence the "unreferenced local function" warning (project builds /WX).
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:4505)
+#endif
+
 // SplitMix64 keystream. Deterministic, dependency-free, same result on both sides.
 static void ahkw_xor_keystream(unsigned char *buf, uint32_t len, uint64_t seed)
 {
@@ -71,5 +78,9 @@ static int ahkw_is_encoded(const unsigned char *buf, uint32_t len, uint32_t *out
                         | ((uint32_t)buf[AHKW_SCRIPT_MAGIC_LEN + 3] << 24);
     return 1;
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #endif // script_crypt_h

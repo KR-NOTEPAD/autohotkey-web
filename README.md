@@ -48,7 +48,23 @@ REM 2) 실행
 AutoHotkeyWeb.exe myapp.ahk
 
 REM 3) 단일 EXE로 컴파일 (엔진+스크립트+웹자산이 .exe 하나)
-compiler\AhkWeb2Exe.exe /in myapp.ahk /out myapp.exe
+compiler\AhkWeb2Exe.exe /in myapp.ahk /out myapp.exe /icon myapp.ico
+REM    인자 없이 실행하면 Ahk2Exe처럼 GUI (스크립트·출력·아이콘·버전 정보, 드래그&드롭)
+compiler\AhkWeb2Exe.exe
+```
+
+컴파일 지시어도 Ahk2Exe와 같은 방식으로 씁니다 (`;@Ahk2Exe-` 또는 `;@AhkWeb-`, GUI/명령줄 값보다 우선):
+
+```autohotkey
+;@Ahk2Exe-SetMainIcon app.ico          ; exe·트레이 아이콘 교체
+;@Ahk2Exe-SetVersion 1.2.3.4           ; 파일/제품 버전
+;@Ahk2Exe-SetDescription 내 프로그램
+;@Ahk2Exe-SetCopyright (c) 2026 Me
+;@Ahk2Exe-SetCompanyName / SetProductName / SetOrigFilename / SetInternalName / SetName
+;@Ahk2Exe-Set Comments, 임의 속성도 가능
+;@Ahk2Exe-AddResource pause.ico, 207   ; 아이콘 그룹 교체(206 Suspend·207 Pause·208 둘 다) 또는 기타 리소스
+;@Ahk2Exe-ExeName %A_ScriptDir%\dist\MyApp
+;@AhkWeb-Assets web                    ; 웹 자산 폴더 내장
 ```
 
 설치하면 **우클릭 → 새로 만들기 → "AutoHotkey Web Script"**(`.ahkw`, 한글 UTF-8 BOM 템플릿)가 생기고,

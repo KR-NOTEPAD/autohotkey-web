@@ -22,6 +22,13 @@
 - **EXE 스크립트 암호화** — `AhkWeb2Exe` 컴파일 시 스크립트를 DEFLATE 압축 + 키스트림 XOR(컨테이너 `AHKW1`).
   리소스 뷰어/strings로 평문 노출 안 됨. 엔진이 메모리에서 복원.
 - **`A_AhkWebBuild`** — 포크 빌드 버전 변수(이 항목의 버전).
+- **AhkWeb2Exe: Ahk2Exe식 아이콘·버전 정보** — `/icon`과 `;@Ahk2Exe-SetMainIcon`이 실제
+  `RT_GROUP_ICON`/`RT_ICON`을 교체(탐색기·작업표시줄·트레이 아이콘 반영). 이전엔 RCDATA에만 넣어 효과가 없었음.
+  `SetVersion`·`SetDescription`·`SetCopyright`·`SetCompanyName`·`SetProductName`·`Set <속성>, <값>` 등으로
+  `VS_VERSIONINFO` 재작성, `AddResource`(아이콘 그룹·비트맵·HTML·RCDATA), `ExeName`, `;@AhkWeb-Base` 지원.
+- **AhkWeb2Exe GUI** — 인자 없이 실행하면 Ahk2Exe 같은 창(스크립트/출력/아이콘 미리보기/베이스/버전 정보,
+  드래그&드롭, 마지막 아이콘 기억). `.ahkw` 출력 이름 처리, 출력 폴더 자동 생성, GUI 서브시스템(콘솔 깜빡임 없음).
+  테스트: `tests\compiler\verify_icon_test.ps1`.
 
 ### Changed (변경)
 - **식별자 중립화(안티치트 오탐 완화)** — 컴파일 배포 exe의 창 클래스(`AhkwShell`/`AhkwShellGui`/`AhkwWebView`),

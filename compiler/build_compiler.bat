@@ -15,9 +15,13 @@ REM shared header from the engine source every build (compiler and engine must n
 if exist "..\engine_src\source\script_crypt.h" copy /y "..\engine_src\source\script_crypt.h" "script_crypt.h" >nul
 
 echo [BUILD] AhkWeb2Exe.exe ...
-cl /nologo /O2 /W3 ahkweb2exe.c miniz.c /Fe:AhkWeb2Exe.exe /link user32.lib
-if errorlevel 1 ( echo [FAILED] exit /b 1 )
-del ahkweb2exe.obj miniz.obj 2>nul
+set "RES="
+rc /nologo /fo ahkweb2exe.res ahkweb2exe.rc >nul 2>nul && set "RES=ahkweb2exe.res"
+REM GUI subsystem (Ahk2Exe-style window when run without /in); CLI output attaches to the
+REM parent console or uses redirected stdout (SciTE output pane).
+cl /nologo /O2 /W3 /utf-8 ahkweb2exe.c miniz.c %RES% /Fe:AhkWeb2Exe.exe /link /SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup /MANIFEST:EMBED
+if errorlevel 1 ( echo [FAILED] & exit /b 1 )
+del ahkweb2exe.obj miniz.obj ahkweb2exe.res 2>nul
 
 REM Refresh the base .bin from the engine's Self-contained build output.
 set "BIN=..\engine_src\bin\Unicode 64-bit.bin"

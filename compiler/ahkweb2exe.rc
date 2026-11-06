@@ -1,0 +1,2 @@
+// AhkWeb2Exe's own resources (window / file icon). Built by build_compiler.bat.
+1 ICON "..\\engine_src\\source\\resources\\icon_main.ico"

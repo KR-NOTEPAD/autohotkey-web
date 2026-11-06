@@ -29,6 +29,8 @@
 - **AhkWeb2Exe GUI** — 인자 없이 실행하면 Ahk2Exe 같은 창(스크립트/출력/아이콘 미리보기/베이스/버전 정보,
   드래그&드롭, 마지막 아이콘 기억). `.ahkw` 출력 이름 처리, 출력 폴더 자동 생성, GUI 서브시스템(콘솔 깜빡임 없음).
   테스트: `tests\compiler\verify_icon_test.ps1`.
+- **설치 프로그램** — 시작 메뉴 "AhkWeb2Exe 컴파일러" 바로가기(+ 바탕화면 선택), `.ahkw` 우클릭
+  "컴파일 (옵션 창)" 추가, 선택 시 `.ahk` 우클릭에도 "AutoHotkey Web으로 컴파일 (옵션 창)"(연결은 건드리지 않음).
 
 ### Changed (변경)
 - **식별자 중립화(안티치트 오탐 완화)** — 컴파일 배포 exe의 창 클래스(`AhkwShell`/`AhkwShellGui`/`AhkwWebView`),

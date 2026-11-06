@@ -59,6 +59,18 @@ korean.CompEngine=엔진 · 컴파일러 · 문서 · 예제 (필수)
 english.CompEngine=Engine, compiler, docs and examples (required)
 korean.CompModels=딥러닝 모델 (한글 OCR + kor_unsmile 분류 + kor_embed 백본, 약 230MB)
 english.CompModels=Deep-learning models (Korean OCR + kor_unsmile classifier + kor_embed backbone, ~230MB)
+korean.CompilerName=AhkWeb2Exe 컴파일러
+english.CompilerName=AhkWeb2Exe Compiler
+korean.TaskDesktop=바탕화면에 컴파일러 바로가기 만들기
+english.TaskDesktop=Create a desktop shortcut for the compiler
+korean.TaskAhkCompile=.ahk 파일 우클릭 메뉴에도 "AutoHotkey Web으로 컴파일" 추가
+english.TaskAhkCompile=Also add "Compile with AutoHotkey Web" to the .ahk right-click menu
+korean.VerbCompile=컴파일 (.exe)
+english.VerbCompile=Compile Script (.exe)
+korean.VerbCompileGui=컴파일 (옵션 창: 아이콘 · 버전 정보)...
+english.VerbCompileGui=Compile with Options (icon, version info)...
+korean.VerbAhkCompileGui=AutoHotkey Web으로 컴파일 (옵션 창)...
+english.VerbAhkCompileGui=Compile with AutoHotkey Web (options)...
 
 [Types]
 Name: "full"; Description: "{cm:TypeFull}"
@@ -71,6 +83,8 @@ Name: "models"; Description: "{cm:CompModels}"; Types: full
 [Tasks]
 Name: "addtopath"; Description: "{cm:TaskPath}"; Flags: unchecked
 Name: "scite"; Description: "{cm:TaskScite}"; Check: SciTEInstalled
+Name: "desktopicon"; Description: "{cm:TaskDesktop}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "ahkcompile"; Description: "{cm:TaskAhkCompile}"; Flags: unchecked
 
 [Dirs]
 Name: "{win}\ShellNew"; Flags: uninsneveruninstall
@@ -106,8 +120,16 @@ Root: HKCR; Subkey: "AutoHotkeyWeb.Script\DefaultIcon"; ValueType: string; Value
 Root: HKCR; Subkey: "AutoHotkeyWeb.Script\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExe}"" ""%1"" %*"
 Root: HKCR; Subkey: "AutoHotkeyWeb.Script\shell\edit"; ValueType: string; ValueData: "Edit Script"
 Root: HKCR; Subkey: "AutoHotkeyWeb.Script\shell\edit\command"; ValueType: string; ValueData: "{code:GetEditCmd}"
-Root: HKCR; Subkey: "AutoHotkeyWeb.Script\shell\compile"; ValueType: string; ValueData: "Compile Script (.exe)"
+Root: HKCR; Subkey: "AutoHotkeyWeb.Script\shell\compile"; ValueType: string; ValueData: "{cm:VerbCompile}"
 Root: HKCR; Subkey: "AutoHotkeyWeb.Script\shell\compile\command"; ValueType: string; ValueData: """{app}\compiler\AhkWeb2Exe.exe"" /in ""%1"""
+; Compile with options: opens the AhkWeb2Exe window with the script prefilled.
+Root: HKCR; Subkey: "AutoHotkeyWeb.Script\shell\compilegui"; ValueType: string; ValueData: "{cm:VerbCompileGui}"
+Root: HKCR; Subkey: "AutoHotkeyWeb.Script\shell\compilegui"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\compiler\AhkWeb2Exe.exe,0"
+Root: HKCR; Subkey: "AutoHotkeyWeb.Script\shell\compilegui\command"; ValueType: string; ValueData: """{app}\compiler\AhkWeb2Exe.exe"" /gui ""%1"""
+; Optional: same for plain .ahk files, without taking over the .ahk association (SystemFileAssociations).
+Root: HKCR; Subkey: "SystemFileAssociations\.ahk\shell\AhkWebCompileGui"; ValueType: string; ValueData: "{cm:VerbAhkCompileGui}"; Tasks: ahkcompile; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.ahk\shell\AhkWebCompileGui"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\compiler\AhkWeb2Exe.exe,0"; Tasks: ahkcompile
+Root: HKCR; Subkey: "SystemFileAssociations\.ahk\shell\AhkWebCompileGui\command"; ValueType: string; ValueData: """{app}\compiler\AhkWeb2Exe.exe"" /gui ""%1"""; Tasks: ahkcompile
 
 ; "New -> AutoHotkey Web Script" shell entry.
 Root: HKCR; Subkey: ".ahkw\ShellNew"; ValueType: string; ValueName: "FileName"; ValueData: "AutoHotkeyWeb.ahk"; Flags: uninsdeletekey
@@ -117,6 +139,8 @@ Root: HKCR; Subkey: ".ahkw\ShellNew"; ValueType: string; ValueName: "FileName"; 
 Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Tasks: addtopath; Check: NeedsAddPath
 
 [Icons]
+Name: "{group}\{cm:CompilerName}"; Filename: "{app}\compiler\AhkWeb2Exe.exe"; WorkingDir: "{app}\compiler"
+Name: "{autodesktop}\{cm:CompilerName}"; Filename: "{app}\compiler\AhkWeb2Exe.exe"; WorkingDir: "{app}\compiler"; Tasks: desktopicon
 Name: "{group}\AutoHotkey Web 문서"; Filename: "{app}\docs\index.htm"
 Name: "{group}\예제 폴더 (딥러닝 · CDP)"; Filename: "{app}\examples"
 Name: "{group}\새 스크립트 템플릿"; Filename: "{app}\Template.ahk"

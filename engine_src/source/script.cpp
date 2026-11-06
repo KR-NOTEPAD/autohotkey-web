@@ -65,6 +65,7 @@ VarEntry g_BIV_A[] =
 	A_(AhkVersion),
 	A_x(AhkWebAssets, BIV_AhkWebAssets),   // AutoHotkey Web
 	A_x(AhkWebBuild, BIV_AhkWebBuild),     // AutoHotkey Web: fork build (date-based)
+	A_x(AhkWebFiles, BIV_AhkWebFiles),     // AutoHotkey Web: ;@AhkWeb-Include extraction folder
 	A_x(AhkWebVersion, BIV_AhkWebVersion), // AutoHotkey Web
 	A_x(AppData, BIV_SpecialFolderPath),
 	A_x(AppDataCommon, BIV_SpecialFolderPath),

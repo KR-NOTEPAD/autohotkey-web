@@ -3259,6 +3259,7 @@ BIV_DECL_R (BIV_AhkVersion);
 BIV_DECL_R (BIV_AhkWebBuild);   // AutoHotkey Web: fork build version (date-based)
 BIV_DECL_R (BIV_AhkWebVersion); // AutoHotkey Web
 BIV_DECL_R (BIV_AhkWebAssets);  // AutoHotkey Web
+BIV_DECL_R (BIV_AhkWebFiles);   // AutoHotkey Web
 BIV_DECL_R (BIV_IsAhkWeb);      // AutoHotkey Web
 BIV_DECL_R (BIV_AhkPath);
 BIV_DECL_R (BIV_TickCount);

@@ -65,7 +65,15 @@ compiler\AhkWeb2Exe.exe
 ;@Ahk2Exe-AddResource pause.ico, 207   ; 아이콘 그룹 교체(206 Suspend·207 Pause·208 둘 다) 또는 기타 리소스
 ;@Ahk2Exe-ExeName %A_ScriptDir%\dist\MyApp
 ;@AhkWeb-Assets web                    ; 웹 자산 폴더 내장
+;@AhkWeb-Include data                  ; 아무 파일/폴더나 exe에 포함 → 실행 시 A_AhkWebFiles 에 풀림
+;@AhkWeb-ExtractTo exe                 ; temp(기본) | exe | appdata | localappdata
+;@AhkWeb-Setup                         ; exe와 함께 설치 마법사 MyApp_Setup.exe 생성 (제거·앱 및 기능 등록)
+;@AhkWeb-RequireAdmin                  ; 실행 시 관리자 권한 요청
 ```
+
+`#Include`·Lib 자동 포함 함수·`FileInstall` 원본은 컴파일 시 자동으로 합쳐집니다(Ahk2Exe와 같은 방식, 문법 검사 포함).
+컴파일러 창에는 **기본 · 버전 정보 · 파일 포함 · 설치 마법사 · 고급(트레이 아이콘·코드 서명)** 탭이 있고,
+스크립트별 설정과 최근 스크립트를 기억합니다. 자세한 내용은 `docs\lib\Compile.htm`.
 
 설치하면 **우클릭 → 새로 만들기 → "AutoHotkey Web Script"**(`.ahkw`, 한글 UTF-8 BOM 템플릿)가 생기고,
 SciTE4에서 구문 강조·F5 실행·F7 디버그·Ctrl+F7 컴파일·자동완성이 자동 구성됩니다.

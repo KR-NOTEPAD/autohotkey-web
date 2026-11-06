@@ -1,44 +1,31 @@
 /* ============================================================================
- *  AhkWeb2Exe - AutoHotkey Web script compiler
+ *  AhkWeb2Exe - AutoHotkey Web script compiler (core + command line)
  *
  *  Produces a standalone .exe by copying the AutoHotkey Web self-contained base
  *  (Unicode 64-bit .bin) and embedding:
- *    - the script as RCDATA ">AHKWEB SCRIPT<" (AHKW1 container, see script_crypt.h),
- *    - optionally a web asset folder, zipped, as RCDATA ">AHKWEB ASSETS<",
- *      when the script contains a directive:  ;@AhkWeb-Assets <folder>
- *    - a custom main icon (real RT_GROUP_ICON/RT_ICON replacement, like Ahk2Exe),
- *    - version information (VS_VERSIONINFO rewritten from base + overrides),
- *    - extra resources (;@Ahk2Exe-AddResource).
+ *    - the script, with #Include / #IncludeAgain / Lib auto-includes merged in
+ *      (Ahk2Exe-style preprocessing), as RCDATA ">AHKWEB SCRIPT<" (AHKW1 container),
+ *    - FileInstall sources as RCDATA named after the upper-cased source text,
+ *    - ;@AhkWeb-Assets folder as ">AHKWEB ASSETS<" (A_AhkWebAssets),
+ *    - ;@AhkWeb-Include files/folders as ">AHKWEB FILES<" + ">AHKWEB FILESCFG<",
+ *      extracted at startup (A_AhkWebFiles),
+ *    - custom icons (main 159, tray 206/207/208), version info, manifest
+ *      (RequireAdmin), extra resources.
+ *  Optionally wraps the result in a native setup wizard (AhkWebSetup.bin) and/or
+ *  signs it with signtool.
  *
- *  Usage (Ahk2Exe-compatible subset):
- *      AhkWeb2Exe                              -> GUI (like Ahk2Exe)
- *      AhkWeb2Exe <script.ahk>                 -> GUI, source prefilled
- *      AhkWeb2Exe /in <script.ahk> [/out <out.exe>] [/bin|/base <base.bin>]
- *                 [/icon <file.ico>] [/silent] [/gui]
+ *  Usage:
+ *      AhkWeb2Exe                              -> GUI
+ *      AhkWeb2Exe [/gui] <script.ahk>          -> GUI, source prefilled
+ *      AhkWeb2Exe /in <script> [/out <exe>] [/bin|/base <bin>] [/icon <ico>]
+ *                 [/setup] [/silent]
  *
- *  Script directives (prefix ;@Ahk2Exe- or ;@AhkWeb-, directives override GUI/CLI):
- *      SetMainIcon <file.ico>          ExeName <path>
- *      SetVersion <1.2.3.4>            SetFileVersion / SetProductVersion
- *      SetDescription / SetCopyright / SetCompanyName / SetProductName
- *      SetOrigFilename / SetInternalName / SetLegalTrademarks / SetComments
- *      SetName <name>                  Set <Property>, <Value>
- *      AddResource [*Type] <file> [, Name]   (.ico -> icon group, e.g. 206/207/208)
- *      Assets <folder> (AhkWeb)        Base <file.bin> (;@AhkWeb-Base only)
- *
- *  Build: see build_compiler.bat (x64 Native Tools, cl /utf-8, GUI subsystem).
+ *  Directives (;@Ahk2Exe-... or ;@AhkWeb-..., override GUI/CLI): see README.
  * ============================================================================ */
-#ifndef UNICODE
-#define UNICODE
-#endif
-#ifndef _UNICODE
-#define _UNICODE
-#endif
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "a2e.h"
 #include <commdlg.h>
 #include <shellapi.h>
 #include <shlobj.h>
-#include <wchar.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,48 +38,64 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "comdlg32.lib")
+#pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "version.lib")
 #pragma comment(linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
-static const wchar_t *RES_SCRIPT = L">AHKWEB SCRIPT<";
-static const wchar_t *RES_ASSETS = L">AHKWEB ASSETS<";
+static const wchar_t *RES_SCRIPT   = L">AHKWEB SCRIPT<";
+static const wchar_t *RES_ASSETS   = L">AHKWEB ASSETS<";
+static const wchar_t *RES_FILES    = L">AHKWEB FILES<";
+static const wchar_t *RES_FILESCFG = L">AHKWEB FILESCFG<";
+static const wchar_t *RES_SETUPCFG = L">SETUP CFG<";
+static const wchar_t *RES_SETUPPAY = L">SETUP PAYLOAD<";
+static const wchar_t *RES_SETUPLIC = L">SETUP LICENSE<";
 #define RT_BITMAP_W     MAKEINTRESOURCEW(2)
 #define RT_ICON_W       MAKEINTRESOURCEW(3)
 #define RT_RCDATA_W     MAKEINTRESOURCEW(10)
 #define RT_GROUP_ICON_W MAKEINTRESOURCEW(14)
 #define RT_VERSION_W    MAKEINTRESOURCEW(16)
-#define IDI_MAIN_GROUP  159   /* engine resource.h: IDI_MAIN (main + tray icon) */
+#define RT_MANIFEST_W   MAKEINTRESOURCEW(24)
+#define IDI_MAIN_GROUP  159   /* engine resource.h: IDI_MAIN (exe + tray icon) */
+#define IDI_SUSPEND     206
+#define IDI_PAUSE       207
+#define IDI_PAUSE_SUSP  208
+#define SETUP_ICON_ID   1     /* setup_stub.rc */
 #define LANG_NEUTRAL_ID MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL)
 
-/* ---------------------------------------------------------------- options -- */
-#define MAX_VI   24
-#define MAX_RES  16
-typedef struct { wchar_t key[64]; wchar_t val[256]; } VIPair;
-typedef struct {
-    wchar_t path[MAX_PATH];
-    wchar_t name[64];       /* string name (upper-cased) when !nameIsInt */
-    int     nameIsInt;
-    WORD    nameInt;
-    WORD    type;           /* 0 = auto from extension */
-} ResItem;
-typedef struct {
-    wchar_t in[MAX_PATH], out[MAX_PATH], bin[MAX_PATH], icon[MAX_PATH];
-    VIPair  vi[MAX_VI]; int nvi;       /* explicit version overrides */
-    ResItem res[MAX_RES]; int nres;
-    int     silent;
-} Opts;
-
-/* Standard StringFileInfo keys (also what the GUI fills). */
-static const wchar_t *VI_STD[] = {
+const wchar_t *VI_STD[] = {
     L"FileDescription", L"FileVersion", L"ProductVersion", L"ProductName",
     L"CompanyName", L"LegalCopyright", L"OriginalFilename", L"InternalName",
     L"LegalTrademarks", L"Comments"
 };
-#define VI_STD_N (sizeof(VI_STD) / sizeof(VI_STD[0]))
+const int VI_STD_N = sizeof(VI_STD) / sizeof(VI_STD[0]);
 
-static void viSet(VIPair *arr, int *n, const wchar_t *key, const wchar_t *val)
+/* ---------------------------------------------------------------- logging -- */
+int     g_haveOut = 0;
+wchar_t g_lastExe[MAX_PATH];
+wchar_t g_log[LOG_CCH];
+wchar_t g_err[2048];
+
+void info(const wchar_t *fmt, ...)
+{
+    wchar_t b[1024]; va_list ap; va_start(ap, fmt);
+    _vsnwprintf_s(b, 1024, _TRUNCATE, fmt, ap); va_end(ap);
+    if (g_haveOut) { wprintf(L"AhkWeb2Exe: %s\n", b); fflush(stdout); }
+    if (wcslen(g_log) + wcslen(b) + 2 < LOG_CCH) { wcscat_s(g_log, LOG_CCH, b); wcscat_s(g_log, LOG_CCH, L"\n"); }
+}
+
+int fail(const wchar_t *fmt, ...)
+{
+    va_list ap; va_start(ap, fmt);
+    _vsnwprintf_s(g_err, 2048, _TRUNCATE, fmt, ap); va_end(ap);
+    return 0;
+}
+
+/* ---------------------------------------------------------------- helpers -- */
+void viSet(VIPair *arr, int *n, const wchar_t *key, const wchar_t *val)
 {
     for (int i = 0; i < *n; i++)
         if (!_wcsicmp(arr[i].key, key)) { wcsncpy_s(arr[i].val, 256, val, _TRUNCATE); return; }
@@ -102,30 +105,15 @@ static void viSet(VIPair *arr, int *n, const wchar_t *key, const wchar_t *val)
     (*n)++;
 }
 
-/* ---------------------------------------------------------------- logging -- */
-static int     g_haveOut = 0;           /* stdout usable (pipe/file/console) */
-static wchar_t g_log[4096];
-static wchar_t g_err[1024];
-
-static void info(const wchar_t *fmt, ...)
+const wchar_t *viGet(const VIPair *arr, int n, const wchar_t *key)
 {
-    wchar_t b[1024]; va_list ap; va_start(ap, fmt);
-    _vsnwprintf_s(b, 1024, _TRUNCATE, fmt, ap); va_end(ap);
-    if (g_haveOut) { wprintf(L"AhkWeb2Exe: %s\n", b); fflush(stdout); }
-    if (wcslen(g_log) + wcslen(b) + 2 < 4096) { wcscat_s(g_log, 4096, b); wcscat_s(g_log, 4096, L"\n"); }
+    for (int i = 0; i < n; i++) if (!_wcsicmp(arr[i].key, key)) return arr[i].val;
+    return L"";
 }
 
-static int fail(const wchar_t *fmt, ...)
-{
-    va_list ap; va_start(ap, fmt);
-    _vsnwprintf_s(g_err, 1024, _TRUNCATE, fmt, ap); va_end(ap);
-    return 0;
-}
-
-/* ---------------------------------------------------------------- helpers -- */
 static unsigned char *readFile(const wchar_t *path, DWORD *outLen)
 {
-    HANDLE h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL,
+    HANDLE h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h == INVALID_HANDLE_VALUE) return NULL;
     DWORD sz = GetFileSize(h, NULL);
@@ -137,42 +125,88 @@ static unsigned char *readFile(const wchar_t *path, DWORD *outLen)
     return buf;
 }
 
-static int endsWithI(const wchar_t *s, const wchar_t *suf)
+static int writeFileAll(const wchar_t *path, const void *data, DWORD len)
+{
+    HANDLE h = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    DWORD wr = 0; BOOL ok = WriteFile(h, data, len, &wr, NULL) && wr == len;
+    CloseHandle(h);
+    return ok;
+}
+
+/* Decode a text file (UTF-8 BOM / UTF-16 LE BOM / UTF-8 / ANSI) to a malloc'd wide string. */
+static wchar_t *readTextFileW(const wchar_t *path)
+{
+    DWORD n = 0; unsigned char *b = readFile(path, &n);
+    if (!b) return NULL;
+    wchar_t *w = NULL;
+    if (n >= 2 && b[0] == 0xFF && b[1] == 0xFE)
+    {
+        DWORD wc = (n - 2) / 2;
+        w = (wchar_t *)malloc((wc + 1) * sizeof(wchar_t));
+        if (w) { memcpy(w, b + 2, wc * sizeof(wchar_t)); w[wc] = 0; }
+    }
+    else
+    {
+        unsigned char *s = b; DWORD sl = n;
+        if (sl >= 3 && s[0] == 0xEF && s[1] == 0xBB && s[2] == 0xBF) { s += 3; sl -= 3; }
+        UINT cp = CP_UTF8;
+        int wn = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (const char *)s, (int)sl, NULL, 0);
+        if (!wn && sl) { cp = CP_ACP; wn = MultiByteToWideChar(CP_ACP, 0, (const char *)s, (int)sl, NULL, 0); }
+        w = (wchar_t *)malloc(((size_t)wn + 1) * sizeof(wchar_t));
+        if (w) { if (wn) MultiByteToWideChar(cp, 0, (const char *)s, (int)sl, w, wn); w[wn] = 0; }
+    }
+    free(b);
+    return w;
+}
+
+int endsWithI(const wchar_t *s, const wchar_t *suf)
 {
     size_t ls = wcslen(s), lf = wcslen(suf);
     return ls >= lf && _wcsicmp(s + ls - lf, suf) == 0;
 }
 
-static int fileExists(const wchar_t *p)
+int fileExists(const wchar_t *p)
 {
     DWORD a = GetFileAttributesW(p);
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-static void trimW(wchar_t *s)
+int dirExists(const wchar_t *p)
+{
+    DWORD a = GetFileAttributesW(p);
+    return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+void trimW(wchar_t *s)
 {
     size_t n = wcslen(s);
-    while (n && (s[n-1] == L' ' || s[n-1] == L'\t' || s[n-1] == L'\r')) s[--n] = 0;
+    while (n && (s[n-1] == L' ' || s[n-1] == L'\t' || s[n-1] == L'\r' || s[n-1] == L'\n')) s[--n] = 0;
     size_t i = 0;
     while (s[i] == L' ' || s[i] == L'\t') i++;
     if (i) memmove(s, s + i, (wcslen(s + i) + 1) * sizeof(wchar_t));
 }
 
-static void dirOf(const wchar_t *path, wchar_t *dir, size_t cch)
+void dirOf(const wchar_t *path, wchar_t *dir, size_t cch)
 {
     wcsncpy_s(dir, cch, path, _TRUNCATE);
     wchar_t *slash = wcsrchr(dir, L'\\');
     if (slash) slash[1] = 0; else dir[0] = 0;
 }
 
-static void compilerDir(wchar_t *dir, size_t cch)
+static const wchar_t *fileNameOf(const wchar_t *p)
+{
+    const wchar_t *s = wcsrchr(p, L'\\'); return s ? s + 1 : p;
+}
+
+void compilerDir(wchar_t *dir, size_t cch)
 {
     wchar_t self[MAX_PATH];
     GetModuleFileNameW(NULL, self, MAX_PATH);
     dirOf(self, dir, cch);
 }
 
-static void defaultBin(wchar_t *out, size_t cch)
+void defaultBin(wchar_t *out, size_t cch)
 {
     wchar_t d[MAX_PATH]; compilerDir(d, MAX_PATH);
     _snwprintf_s(out, cch, _TRUNCATE, L"%sAutoHotkeyWeb.bin", d);
@@ -191,7 +225,7 @@ static void resolvePath(const wchar_t *baseDir, const wchar_t *rel, wchar_t *out
 }
 
 /* Default output: script path with .ahk/.ahkw replaced by .exe */
-static void deriveOut(const wchar_t *in, wchar_t *out, size_t cch)
+void deriveOut(const wchar_t *in, wchar_t *out, size_t cch)
 {
     wcsncpy_s(out, cch, in, _TRUNCATE);
     wchar_t *dot = wcsrchr(out, L'.');
@@ -202,19 +236,51 @@ static void deriveOut(const wchar_t *in, wchar_t *out, size_t cch)
         wcscat_s(out, cch, L".exe");
 }
 
-/* Expand %A_ScriptDir% / %A_ScriptName% / %A_ScriptFullPath% (case-insensitive). */
-static void expandVars(const wchar_t *src, wchar_t *dst, size_t cch, const wchar_t *scriptPath)
+/* Setup default: <exe folder>\<AppName or exe name>_Setup.exe */
+void deriveSetupOut(const Opts *o, const wchar_t *exeOut, wchar_t *out, size_t cch)
+{
+    wchar_t dir[MAX_PATH]; dirOf(exeOut, dir, MAX_PATH);
+    wchar_t base[MAX_PATH];
+    const wchar_t *prod = viGet(o->vi, o->nvi, L"ProductName");
+    if (o->appName[0]) wcsncpy_s(base, MAX_PATH, o->appName, _TRUNCATE);
+    else if (prod[0]) wcsncpy_s(base, MAX_PATH, prod, _TRUNCATE);
+    else
+    {
+        wcsncpy_s(base, MAX_PATH, fileNameOf(exeOut), _TRUNCATE);
+        wchar_t *dot = wcsrchr(base, L'.'); if (dot) *dot = 0;
+    }
+    for (wchar_t *p = base; *p; p++) if (wcschr(L"\\/:*?\"<>|", *p)) *p = L'_';
+    _snwprintf_s(out, cch, _TRUNCATE, L"%s%s_Setup.exe", dir, base);
+}
+
+void optsDefaults(Opts *o)
+{
+    memset(o, 0, sizeof(*o));
+    wcscpy_s(o->extractTo, MAX_PATH, L"temp");
+    wcscpy_s(o->extractMode, 16, L"newer");
+    o->scDesktop = 1; o->scStartMenu = 1; o->runAfterInstall = 1;
+    wcscpy_s(o->signTs, 256, L"http://timestamp.digicert.com");
+}
+
+/* Expand %A_ScriptDir% / %A_ScriptName% / %A_ScriptFullPath% / %A_LineFile% /
+ * %A_AppData% / %A_AppDataCommon% / %A_AhkPath% (case-insensitive). */
+static void expandVarsEx(const wchar_t *src, wchar_t *dst, size_t cch, const wchar_t *scriptPath,
+                         const wchar_t *lineFile, const wchar_t *ahkPath)
 {
     wchar_t dir[MAX_PATH]; dirOf(scriptPath, dir, MAX_PATH);
     size_t dl = wcslen(dir); if (dl && dir[dl-1] == L'\\') dir[dl-1] = 0;
-    const wchar_t *name = wcsrchr(scriptPath, L'\\'); name = name ? name + 1 : scriptPath;
-    static const wchar_t *VN[] = { L"%A_ScriptDir%", L"%A_ScriptName%", L"%A_ScriptFullPath%" };
-    const wchar_t *VV[] = { dir, name, scriptPath };
+    wchar_t appdata[MAX_PATH] = L"", common[MAX_PATH] = L"";
+    SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, appdata);
+    SHGetFolderPathW(NULL, CSIDL_COMMON_APPDATA, NULL, 0, common);
+    static const wchar_t *VN[] = { L"%A_ScriptDir%", L"%A_ScriptName%", L"%A_ScriptFullPath%",
+                                   L"%A_LineFile%", L"%A_AppData%", L"%A_AppDataCommon%", L"%A_AhkPath%" };
+    const wchar_t *VV[] = { dir, fileNameOf(scriptPath), scriptPath,
+                            lineFile ? lineFile : scriptPath, appdata, common, ahkPath ? ahkPath : L"" };
     size_t o = 0;
     while (*src && o + 1 < cch)
     {
         int hit = 0;
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 7; i++)
         {
             size_t l = wcslen(VN[i]);
             if (!_wcsnicmp(src, VN[i], l))
@@ -228,49 +294,139 @@ static void expandVars(const wchar_t *src, wchar_t *dst, size_t cch, const wchar
     dst[o] = 0;
 }
 
-/* --- Recursively add a folder's files to the zip, storing paths relative to
- *     the folder root with '/' separators (UTF-8). --------------------------- */
-static int zipAddFolder(mz_zip_archive *zip, const wchar_t *root, const wchar_t *sub)
+static void expandVars(const wchar_t *src, wchar_t *dst, size_t cch, const wchar_t *scriptPath)
+{
+    expandVarsEx(src, dst, cch, scriptPath, NULL, NULL);
+}
+
+/* ----------------------------------------------------- wide string buffer -- */
+typedef struct { wchar_t *p; size_t len, cap; } WBuf;
+static int wbAppend(WBuf *b, const wchar_t *s, size_t n)
+{
+    if (b->len + n + 1 > b->cap)
+    {
+        size_t nc = b->cap ? b->cap * 2 : 65536; while (nc < b->len + n + 1) nc *= 2;
+        wchar_t *np = (wchar_t *)realloc(b->p, nc * sizeof(wchar_t)); if (!np) return 0;
+        b->p = np; b->cap = nc;
+    }
+    wmemcpy(b->p + b->len, s, n); b->len += n; b->p[b->len] = 0;
+    return 1;
+}
+
+/* ------------------------------------------------------------ run process -- */
+/* Runs cmdLine hidden, captures stdout+stderr (decoded from the OEM/ANSI code
+ * page) into out. Returns the exit code, or -1 if it could not start. */
+static int runProcess(const wchar_t *cmdLine, const wchar_t *workDir, wchar_t *out, size_t outCch)
+{
+    if (out && outCch) out[0] = 0;
+    SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE };
+    HANDLE rd = NULL, wr = NULL;
+    if (!CreatePipe(&rd, &wr, &sa, 0)) return -1;
+    SetHandleInformation(rd, HANDLE_FLAG_INHERIT, 0);
+    STARTUPINFOW si; memset(&si, 0, sizeof(si)); si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW; si.wShowWindow = SW_HIDE;
+    si.hStdOutput = wr; si.hStdError = wr; si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    PROCESS_INFORMATION pi;
+    size_t cl = wcslen(cmdLine) + 1;
+    wchar_t *cmd = (wchar_t *)malloc(cl * sizeof(wchar_t));
+    if (!cmd) { CloseHandle(rd); CloseHandle(wr); return -1; }
+    wcscpy_s(cmd, cl, cmdLine);
+    BOOL ok = CreateProcessW(NULL, cmd, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, workDir, &si, &pi);
+    free(cmd);
+    CloseHandle(wr);
+    if (!ok) { CloseHandle(rd); return -1; }
+    char *acc = NULL; size_t an = 0, ac = 0; char tmp[4096]; DWORD got;
+    while (ReadFile(rd, tmp, sizeof(tmp), &got, NULL) && got)
+    {
+        if (an + got + 1 > ac) { ac = (an + got + 1) * 2; char *np = (char *)realloc(acc, ac); if (!np) break; acc = np; }
+        memcpy(acc + an, tmp, got); an += got;
+    }
+    CloseHandle(rd);
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD code = 0; GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hProcess); CloseHandle(pi.hThread);
+    if (acc && out && outCch)
+    {
+        UINT cp = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, acc, (int)an, NULL, 0) ? CP_UTF8 : CP_OEMCP;
+        int wn = MultiByteToWideChar(cp, 0, acc, (int)an, out, (int)outCch - 1);
+        out[wn > 0 ? wn : 0] = 0;
+        trimW(out);
+    }
+    free(acc);
+    return (int)code;
+}
+
+/* -------------------------------------------------------------------- zip -- */
+static void toZipName(const wchar_t *relW, char *out, size_t cch)
+{
+    wchar_t tmp[MAX_PATH * 2]; wcsncpy_s(tmp, MAX_PATH * 2, relW, _TRUNCATE);
+    for (wchar_t *p = tmp; *p; ++p) if (*p == L'\\') *p = L'/';
+    WideCharToMultiByte(CP_UTF8, 0, tmp, -1, out, (int)cch, NULL, NULL);
+}
+
+static int zipAddFile(mz_zip_archive *zip, const wchar_t *full, const wchar_t *relW, unsigned long long *total)
+{
+    DWORD flen = 0;
+    unsigned char *data = readFile(full, &flen);
+    if (!data) return fail(L"cannot read %s", full);
+    char relU8[MAX_PATH * 3]; toZipName(relW, relU8, sizeof(relU8));
+    /* keep the file's own timestamp so the engine's "newer" mode can compare */
+    WIN32_FILE_ATTRIBUTE_DATA fa; time_t mt = 0;
+    if (GetFileAttributesExW(full, GetFileExInfoStandard, &fa))
+    {
+        ULONGLONG t = ((ULONGLONG)fa.ftLastWriteTime.dwHighDateTime << 32) | fa.ftLastWriteTime.dwLowDateTime;
+        mt = (time_t)(t / 10000000ULL - 11644473600ULL);
+    }
+    int ok = mz_zip_writer_add_mem_ex_v2(zip, relU8, data, flen, NULL, 0, MZ_BEST_COMPRESSION,
+                                         0, 0, mt ? &mt : NULL, NULL, 0, NULL, 0);
+    free(data);
+    if (!ok) return fail(L"zip add failed for %s", relW);
+    if (total) *total += flen;
+    return 1;
+}
+
+/* Recursively add a folder's files under relative prefix (may be empty). */
+static int zipAddFolder(mz_zip_archive *zip, const wchar_t *root, const wchar_t *prefix, unsigned long long *total)
 {
     wchar_t pattern[MAX_PATH];
-    if (sub && *sub) _snwprintf_s(pattern, MAX_PATH, _TRUNCATE, L"%s\\%s\\*", root, sub);
-    else             _snwprintf_s(pattern, MAX_PATH, _TRUNCATE, L"%s\\*", root);
-
+    _snwprintf_s(pattern, MAX_PATH, _TRUNCATE, L"%s\\*", root);
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW(pattern, &fd);
     if (h == INVALID_HANDLE_VALUE) return 1; /* empty or missing: not fatal */
     int ok = 1;
     do {
         if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
-
-        wchar_t relW[MAX_PATH];
-        if (sub && *sub) _snwprintf_s(relW, MAX_PATH, _TRUNCATE, L"%s/%s", sub, fd.cFileName);
-        else             _snwprintf_s(relW, MAX_PATH, _TRUNCATE, L"%s", fd.cFileName);
-        for (wchar_t *p = relW; *p; ++p) if (*p == L'\\') *p = L'/';
-
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-        {
-            if (!zipAddFolder(zip, root, relW)) { ok = 0; break; }
-            continue;
-        }
-
-        wchar_t fullW[MAX_PATH];
-        _snwprintf_s(fullW, MAX_PATH, _TRUNCATE, L"%s\\%s%s%s", root,
-                     (sub && *sub) ? sub : L"", (sub && *sub) ? L"\\" : L"", fd.cFileName);
-
-        DWORD flen = 0;
-        unsigned char *data = readFile(fullW, &flen);
-        if (!data) { fail(L"cannot read asset %s", fullW); ok = 0; break; }
-
-        char relU8[MAX_PATH * 3];
-        WideCharToMultiByte(CP_UTF8, 0, relW, -1, relU8, sizeof(relU8), NULL, NULL);
-
-        if (!mz_zip_writer_add_mem(zip, relU8, data, flen, MZ_BEST_COMPRESSION))
-        { free(data); fail(L"zip add failed for %s", relW); ok = 0; break; }
-        free(data);
-    } while (FindNextFileW(h, &fd));
+        wchar_t full[MAX_PATH], rel[MAX_PATH];
+        _snwprintf_s(full, MAX_PATH, _TRUNCATE, L"%s\\%s", root, fd.cFileName);
+        if (prefix && *prefix) _snwprintf_s(rel, MAX_PATH, _TRUNCATE, L"%s\\%s", prefix, fd.cFileName);
+        else                   wcsncpy_s(rel, MAX_PATH, fd.cFileName, _TRUNCATE);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ok = zipAddFolder(zip, full, rel, total);
+        else ok = zipAddFile(zip, full, rel, total);
+    } while (ok && FindNextFileW(h, &fd));
     FindClose(h);
     return ok;
+}
+
+/* Add an Include item: a folder (contents under dest, or under its own name) or a file. */
+static int zipAddInclude(mz_zip_archive *zip, const IncItem *it, unsigned long long *total)
+{
+    wchar_t dest[MAX_PATH]; wcsncpy_s(dest, MAX_PATH, it->dest, _TRUNCATE);
+    for (wchar_t *p = dest; *p; p++) if (*p == L'/') *p = L'\\';
+    while (dest[0] == L'\\' || dest[0] == L'.') { if (dest[0] == L'.' && dest[1] != L'\\') break; memmove(dest, dest + 1, wcslen(dest) * sizeof(wchar_t)); }
+    size_t dl = wcslen(dest); while (dl && dest[dl-1] == L'\\') dest[--dl] = 0;
+    if (wcsstr(dest, L"..") || wcschr(dest, L':')) return fail(L"Include destination must be relative: %s", it->dest);
+
+    if (dirExists(it->src))
+        return zipAddFolder(zip, it->src, dest[0] ? dest : fileNameOf(it->src), total);
+    if (!fileExists(it->src)) return fail(L"Include: not found: %s", it->src);
+    wchar_t rel[MAX_PATH];
+    /* dest naming a folder (trailing slash given, or no extension) keeps the file name */
+    size_t ol = wcslen(it->dest);
+    int destIsDir = dest[0] && ((ol && (it->dest[ol-1] == L'\\' || it->dest[ol-1] == L'/')) || !wcschr(fileNameOf(dest), L'.'));
+    if (!dest[0]) wcsncpy_s(rel, MAX_PATH, fileNameOf(it->src), _TRUNCATE);
+    else if (destIsDir) _snwprintf_s(rel, MAX_PATH, _TRUNCATE, L"%s\\%s", dest, fileNameOf(it->src));
+    else wcsncpy_s(rel, MAX_PATH, dest, _TRUNCATE);
+    return zipAddFile(zip, it->src, rel, total);
 }
 
 /* ------------------------------------------------------------- directives -- */
@@ -297,24 +453,25 @@ static void unescape(wchar_t *s)
     *w = 0;
 }
 
+static int truthy(const wchar_t *v) { return !v[0] || !_wcsicmp(v, L"1") || !_wcsicmp(v, L"true") || !_wcsicmp(v, L"yes") || !_wcsicmp(v, L"on"); }
+
 static void setVer(Opts *o, const wchar_t *key, const wchar_t *val) { viSet(o->vi, &o->nvi, key, val); }
 
-/* Map Ahk2Exe "Set" property aliases to StringFileInfo keys. Returns 1 if handled. */
-static int setProp(Opts *o, const wchar_t *prop, const wchar_t *val)
+/* Map Ahk2Exe "Set" property aliases to StringFileInfo keys. */
+static void setProp(Opts *o, const wchar_t *prop, const wchar_t *val)
 {
     static const struct { const wchar_t *alias, *key; } AL[] = {
         { L"Description", L"FileDescription" }, { L"Copyright", L"LegalCopyright" },
         { L"OrigFilename", L"OriginalFilename" }, { L"Trademarks", L"LegalTrademarks" },
         { L"LegalTrademarks", L"LegalTrademarks" }, { L"Company", L"CompanyName" },
     };
-    if (!_wcsicmp(prop, L"Version"))  { setVer(o, L"FileVersion", val); setVer(o, L"ProductVersion", val); return 1; }
-    if (!_wcsicmp(prop, L"Name"))     { setVer(o, L"ProductName", val); setVer(o, L"InternalName", val); return 1; }
+    if (!_wcsicmp(prop, L"Version"))  { setVer(o, L"FileVersion", val); setVer(o, L"ProductVersion", val); return; }
+    if (!_wcsicmp(prop, L"Name"))     { setVer(o, L"ProductName", val); setVer(o, L"InternalName", val); return; }
     for (size_t i = 0; i < sizeof(AL) / sizeof(AL[0]); i++)
-        if (!_wcsicmp(prop, AL[i].alias)) { setVer(o, AL[i].key, val); return 1; }
-    for (size_t i = 0; i < VI_STD_N; i++)
-        if (!_wcsicmp(prop, VI_STD[i])) { setVer(o, VI_STD[i], val); return 1; }
-    if (prop[0]) { setVer(o, prop, val); return 1; }   /* custom property */
-    return 0;
+        if (!_wcsicmp(prop, AL[i].alias)) { setVer(o, AL[i].key, val); return; }
+    for (int i = 0; i < VI_STD_N; i++)
+        if (!_wcsicmp(prop, VI_STD[i])) { setVer(o, VI_STD[i], val); return; }
+    if (prop[0]) setVer(o, prop, val);   /* custom property */
 }
 
 static void addResourceDirective(Opts *o, const wchar_t *args, const wchar_t *scriptDir)
@@ -337,11 +494,7 @@ static void addResourceDirective(Opts *o, const wchar_t *args, const wchar_t *sc
     memset(r, 0, sizeof(*r));
     resolvePath(scriptDir, path, r->path, MAX_PATH);
     r->type = type;
-    if (!name[0])
-    {   /* default name: file name upper-cased */
-        const wchar_t *fn = wcsrchr(r->path, L'\\'); fn = fn ? fn + 1 : r->path;
-        wcsncpy_s(name, MAX_PATH, fn, _TRUNCATE);
-    }
+    if (!name[0]) wcsncpy_s(name, MAX_PATH, fileNameOf(r->path), _TRUNCATE);
     if (name[0] == L'#') memmove(name, name + 1, wcslen(name) * sizeof(wchar_t));
     wchar_t *end = NULL; unsigned long n = wcstoul(name, &end, 10);
     if (name[0] && end && !*end && n > 0 && n < 65536) { r->nameIsInt = 1; r->nameInt = (WORD)n; }
@@ -349,103 +502,395 @@ static void addResourceDirective(Opts *o, const wchar_t *args, const wchar_t *sc
     o->nres++;
 }
 
-/* Parse ;@Ahk2Exe-* / ;@AhkWeb-* line directives from the script text.
- * Directives override the incoming options (Ahk2Exe behaviour). */
+static void addInclude(Opts *o, const wchar_t *src, const wchar_t *dest, const wchar_t *baseDir)
+{
+    if (o->ninc >= MAX_INC) { info(L"warning: too many Include items (max %d)", MAX_INC); return; }
+    IncItem *it = &o->inc[o->ninc++];
+    resolvePath(baseDir, src, it->src, MAX_PATH);
+    size_t l = wcslen(it->src); while (l > 3 && it->src[l-1] == L'\\') it->src[--l] = 0;
+    wcsncpy_s(it->dest, MAX_PATH, dest, _TRUNCATE);
+}
+
+/* Handle one directive "name args" (already stripped of ;@Ahk2Exe- / ;@AhkWeb-). */
+static void applyDirective(Opts *o, int isWeb, const wchar_t *name, const wchar_t *rawArgs,
+                           const wchar_t *scriptPath, wchar_t *assetsDir, size_t assetsCch)
+{
+    wchar_t scriptDir[MAX_PATH]; dirOf(scriptPath, scriptDir, MAX_PATH);
+    wchar_t ex[1024]; expandVars(rawArgs, ex, 1024, scriptPath);
+    wchar_t v[1024]; wcscpy_s(v, 1024, ex); unescape(v);   /* single-argument form */
+    wchar_t a1[1024], a2[1024]; splitComma(ex, a1, a2, 1024); unescape(a1); unescape(a2);
+
+    #define IS(n) (!_wcsicmp(name, n))
+    if (IS(L"Assets")) { if (v[0]) resolvePath(scriptDir, v, assetsDir, assetsCch); }
+    else if (IS(L"SetMainIcon")) { if (v[0]) resolvePath(scriptDir, v, o->icon, MAX_PATH); else o->icon[0] = 0; }
+    else if (IS(L"SuspendIcon") || IS(L"SetSuspendIcon")) { if (v[0]) resolvePath(scriptDir, v, o->suspendIcon, MAX_PATH); }
+    else if (IS(L"PauseIcon") || IS(L"SetPauseIcon")) { if (v[0]) resolvePath(scriptDir, v, o->pauseIcon, MAX_PATH); }
+    else if (IS(L"PauseSuspendIcon") || IS(L"SetPauseSuspendIcon")) { if (v[0]) resolvePath(scriptDir, v, o->pauseSuspendIcon, MAX_PATH); }
+    else if (IS(L"ExeName"))
+    {
+        if (v[0])
+        {
+            wchar_t full[MAX_PATH]; resolvePath(scriptDir, v, full, MAX_PATH);
+            size_t L = wcslen(v);
+            if (v[L-1] == L'\\' || v[L-1] == L'/')
+            {
+                wchar_t d[MAX_PATH]; deriveOut(scriptPath, d, MAX_PATH);
+                size_t fl = wcslen(full);
+                if (fl && full[fl-1] != L'\\') wcscat_s(full, MAX_PATH, L"\\");
+                wcscat_s(full, MAX_PATH, fileNameOf(d));
+            }
+            else if (!wcschr(fileNameOf(full), L'.')) wcscat_s(full, MAX_PATH, L".exe");
+            wcscpy_s(o->out, MAX_PATH, full);
+        }
+    }
+    else if (IS(L"Base") || IS(L"Bin"))
+    {
+        if (isWeb) { if (v[0]) resolvePath(scriptDir, v, o->bin, MAX_PATH); }
+        else info(L"note: ;@Ahk2Exe-%s ignored (stock AutoHotkey base); use ;@AhkWeb-Base", name);
+    }
+    else if (IS(L"SetVersion"))  setProp(o, L"Version", v);
+    else if (IS(L"SetName"))     setProp(o, L"Name", v);
+    else if (IS(L"Set"))         setProp(o, a1, a2);
+    else if (IS(L"AddResource")) addResourceDirective(o, ex, scriptDir);
+    else if (IS(L"UpdateManifest")) o->requireAdmin = (_wtoi(a1) != 0);
+    else if (IS(L"RequireAdmin")) o->requireAdmin = truthy(v);
+    else if (IS(L"PostExec"))
+    {   /* ;@Ahk2Exe-PostExec <command> [, When]  (When 0/blank = after compile) */
+        if (a1[0] && (!a2[0] || _wtoi(a2) == 0) && o->npost < MAX_POST)
+            wcsncpy_s(o->postExec[o->npost++], 1024, a1, _TRUNCATE);
+    }
+    /* ---- AutoHotkey Web: bundled files ---- */
+    else if (IS(L"Include") || IS(L"IncludeFiles")) { if (a1[0]) addInclude(o, a1, a2, scriptDir); }
+    else if (IS(L"ExtractTo"))
+    {
+        if (!_wcsicmp(v, L"temp") || !_wcsicmp(v, L"exe") || !_wcsicmp(v, L"appdata") || !_wcsicmp(v, L"localappdata"))
+            { wcsncpy_s(o->extractTo, MAX_PATH, v, _TRUNCATE); _wcslwr_s(o->extractTo, MAX_PATH); }
+        else if (v[0]) { wchar_t p[MAX_PATH]; resolvePath(scriptDir, v, p, MAX_PATH); _snwprintf_s(o->extractTo, MAX_PATH, _TRUNCATE, L"path:%s", p); }
+    }
+    else if (IS(L"ExtractMode"))
+    {
+        if (!_wcsicmp(v, L"always") || !_wcsicmp(v, L"newer") || !_wcsicmp(v, L"missing"))
+            { wcsncpy_s(o->extractMode, 16, v, _TRUNCATE); _wcslwr_s(o->extractMode, 16); }
+        else info(L"warning: ExtractMode must be always|newer|missing");
+    }
+    else if (IS(L"KeepFiles")) o->keepFiles = truthy(v);
+    /* ---- AutoHotkey Web: setup wizard ---- */
+    else if (IS(L"Setup"))          o->outputMode = truthy(v) ? OUT_SETUP : OUT_EXE;
+    else if (IS(L"SetupName"))      wcsncpy_s(o->appName, 128, v, _TRUNCATE);
+    else if (IS(L"SetupPublisher")) wcsncpy_s(o->publisher, 128, v, _TRUNCATE);
+    else if (IS(L"SetupDir"))       wcsncpy_s(o->installDir, 128, v, _TRUNCATE);
+    else if (IS(L"SetupScope"))     o->perMachine = !_wcsicmp(v, L"machine") || !_wcsicmp(v, L"allusers") || !_wcsicmp(v, L"all");
+    else if (IS(L"SetupLicense"))   { if (v[0]) resolvePath(scriptDir, v, o->license, MAX_PATH); else o->license[0] = 0; }
+    else if (IS(L"SetupShortcuts"))
+    {
+        o->scDesktop = wcsstr(_wcslwr(v), L"desktop") != NULL;
+        o->scStartMenu = wcsstr(v, L"start") != NULL;
+    }
+    else if (IS(L"SetupRun"))       o->runAfterInstall = truthy(v);
+    else if (IS(L"SetupOut"))       { if (v[0]) resolvePath(scriptDir, v, o->setupOut, MAX_PATH); }
+    /* ---- AutoHotkey Web: code signing ---- */
+    else if (IS(L"Sign"))
+    {   /* ;@AhkWeb-Sign [cert.pfx [, password]]  (blank = best certificate from the store) */
+        o->sign = 1;
+        if (a1[0]) resolvePath(scriptDir, a1, o->signPfx, MAX_PATH);
+        wcsncpy_s(o->signPass, 128, a2, _TRUNCATE);
+    }
+    else if (IS(L"SignSubject"))    { o->sign = 1; wcsncpy_s(o->signSubject, 128, v, _TRUNCATE); }
+    else if (IS(L"SignTimestamp"))  wcsncpy_s(o->signTs, 256, v, _TRUNCATE);
+    else if (IS(L"IgnoreBegin") || IS(L"IgnoreEnd") || IS(L"Keep")) { /* handled by the preprocessor */ }
+    else if (!_wcsnicmp(name, L"Set", 3) && name[3]) setProp(o, name + 3, v);
+    else info(L"note: directive ;@%s%s not supported, ignored", isWeb ? L"AhkWeb-" : L"Ahk2Exe-", name);
+    #undef IS
+}
+
+/* Parse ";@Ahk2Exe-Name args" / ";@AhkWeb-Name args" at the start of a line.
+ * Returns 0 if the line is not a directive; fills name/args and isWeb. */
+static int parseDirectiveLine(const wchar_t *s, const wchar_t *eol, int *isWeb, wchar_t *name, size_t nameCch,
+                              wchar_t *args, size_t argsCch)
+{
+    while (s < eol && (*s == L' ' || *s == L'\t')) s++;
+    size_t pl = 0;
+    if (eol - s > 2 && s[0] == L';' && s[1] == L'@')
+    {
+        if (!_wcsnicmp(s + 2, L"Ahk2Exe-", 8)) pl = 10;
+        else if (!_wcsnicmp(s + 2, L"AhkWeb-", 7)) pl = 9;
+    }
+    if (!pl) return 0;
+    *isWeb = (pl == 9);
+    wchar_t raw[1024]; size_t rl = (size_t)(eol - (s + pl)); if (rl >= 1024) rl = 1023;
+    wmemcpy(raw, s + pl, rl); raw[rl] = 0; trimW(raw);
+    size_t ni = 0; const wchar_t *a = raw;
+    while (*a && *a != L' ' && *a != L'\t' && ni + 1 < nameCch) name[ni++] = *a++;
+    name[ni] = 0;
+    wcsncpy_s(args, argsCch, a, _TRUNCATE);
+    for (wchar_t *c = args; *c; c++)   /* strip trailing " ;comment" (unescaped) */
+        if (*c == L';' && c > args && (c[-1] == L' ' || c[-1] == L'\t') && (c - 1 == args || c[-2] != L'`'))
+        { *c = 0; break; }
+    trimW(args);
+    return 1;
+}
+
 static void parseDirectives(const wchar_t *text, const wchar_t *scriptPath, Opts *o,
                             wchar_t *assetsDir, size_t assetsCch)
 {
-    wchar_t scriptDir[MAX_PATH]; dirOf(scriptPath, scriptDir, MAX_PATH);
     const wchar_t *line = text;
     while (*line)
     {
         const wchar_t *eol = line;
         while (*eol && *eol != L'\n') eol++;
-        const wchar_t *s = line;
-        while (s < eol && (*s == L' ' || *s == L'\t')) s++;
-
-        size_t pl = 0;
-        if (eol - s > 2 && s[0] == L';' && s[1] == L'@')
-        {
-            if (!_wcsnicmp(s + 2, L"Ahk2Exe-", 8)) pl = 10;
-            else if (!_wcsnicmp(s + 2, L"AhkWeb-", 7)) pl = 9;
-        }
-        if (pl)
-        {
-            int isWeb = (pl == 9);
-            wchar_t raw[1024]; size_t rl = (size_t)(eol - (s + pl)); if (rl >= 1024) rl = 1023;
-            wmemcpy(raw, s + pl, rl); raw[rl] = 0; trimW(raw);
-
-            wchar_t name[64]; size_t ni = 0;
-            const wchar_t *a = raw;
-            while (*a && *a != L' ' && *a != L'\t' && ni < 63) name[ni++] = *a++;
-            name[ni] = 0;
-            wchar_t args[1024]; wcsncpy_s(args, 1024, a, _TRUNCATE);
-            /* strip trailing " ;comment" (unescaped) */
-            for (wchar_t *c = args; *c; c++)
-                if (*c == L';' && c > args && (c[-1] == L' ' || c[-1] == L'\t') && (c - 1 == args || c[-2] != L'`'))
-                { *c = 0; break; }
-            trimW(args);
-            wchar_t ex[1024]; expandVars(args, ex, 1024, scriptPath);
-
-            if (!_wcsicmp(name, L"Assets"))
-            {
-                wchar_t v[1024]; wcscpy_s(v, 1024, ex); unescape(v);
-                if (v[0]) resolvePath(scriptDir, v, assetsDir, assetsCch);
-            }
-            else if (!_wcsicmp(name, L"SetMainIcon"))
-            {
-                wchar_t v[1024]; wcscpy_s(v, 1024, ex); unescape(v);
-                if (v[0]) resolvePath(scriptDir, v, o->icon, MAX_PATH); else o->icon[0] = 0;
-            }
-            else if (!_wcsicmp(name, L"ExeName"))
-            {
-                wchar_t v[1024]; wcscpy_s(v, 1024, ex); unescape(v);
-                if (v[0])
-                {
-                    wchar_t full[MAX_PATH]; resolvePath(scriptDir, v, full, MAX_PATH);
-                    size_t L = wcslen(v);
-                    if (v[L-1] == L'\\' || v[L-1] == L'/')
-                    {   /* directory only: keep script's name */
-                        wchar_t d[MAX_PATH]; deriveOut(scriptPath, d, MAX_PATH);
-                        const wchar_t *fn = wcsrchr(d, L'\\'); fn = fn ? fn + 1 : d;
-                        size_t fl = wcslen(full);
-                        if (fl && full[fl-1] != L'\\') wcscat_s(full, MAX_PATH, L"\\");
-                        wcscat_s(full, MAX_PATH, fn);
-                    }
-                    else
-                    {
-                        const wchar_t *fn = wcsrchr(full, L'\\'); fn = fn ? fn + 1 : full;
-                        if (!wcschr(fn, L'.')) wcscat_s(full, MAX_PATH, L".exe");
-                    }
-                    wcscpy_s(o->out, MAX_PATH, full);
-                }
-            }
-            else if (!_wcsicmp(name, L"Base") || !_wcsicmp(name, L"Bin"))
-            {
-                if (isWeb)
-                {
-                    wchar_t v[1024]; wcscpy_s(v, 1024, ex); unescape(v);
-                    if (v[0]) resolvePath(scriptDir, v, o->bin, MAX_PATH);
-                }
-                else info(L"note: ;@Ahk2Exe-%s ignored (stock AutoHotkey base); use ;@AhkWeb-Base", name);
-            }
-            else if (!_wcsicmp(name, L"SetVersion"))  { unescape(ex); setProp(o, L"Version", ex); }
-            else if (!_wcsicmp(name, L"SetName"))     { unescape(ex); setProp(o, L"Name", ex); }
-            else if (!_wcsicmp(name, L"Set"))
-            {
-                wchar_t k[1024], v[1024];
-                splitComma(ex, k, v, 1024); unescape(k); unescape(v);
-                setProp(o, k, v);
-            }
-            else if (!_wcsnicmp(name, L"Set", 3) && name[3])
-            {   unescape(ex); setProp(o, name + 3, ex); }
-            else if (!_wcsicmp(name, L"AddResource"))
-                addResourceDirective(o, ex, scriptDir);
-            else
-                info(L"note: directive ;@%s%s not supported, ignored", isWeb ? L"AhkWeb-" : L"Ahk2Exe-", name);
-        }
+        int isWeb; wchar_t name[64], args[1024];
+        if (parseDirectiveLine(line, eol, &isWeb, name, 64, args, 1024))
+            applyDirective(o, isWeb, name, args, scriptPath, assetsDir, assetsCch);
         line = *eol ? eol + 1 : eol;
     }
+}
+
+/* ----------------------------------------------------------- preprocessor -- */
+/* The self-contained base cannot #Include files at run time (and the target PC
+ * would not have them), so - like Ahk2Exe - every #Include / #IncludeAgain and
+ * every Lib function file is merged into one script here. FileInstall sources
+ * are collected so they can be embedded as RCDATA. */
+#define MAX_FI    256
+#define MAX_INCF  512
+typedef struct { wchar_t name[MAX_PATH]; wchar_t path[MAX_PATH]; } FIItem;
+typedef struct {
+    WBuf     out;
+    wchar_t  mainPath[MAX_PATH];
+    wchar_t  ahkExe[MAX_PATH];          /* interpreter, for %A_AhkPath% and /iLib */
+    wchar_t  libDirs[3][MAX_PATH]; int nlib;
+    wchar_t *included[MAX_INCF]; int nincl;
+    FIItem  *fi; int nfi;
+    int      depth;
+} PP;
+
+static void findInterpreter(wchar_t *out, size_t cch)
+{
+    wchar_t d[MAX_PATH]; compilerDir(d, MAX_PATH);
+    const wchar_t *cand[] = { L"..\\AutoHotkeyWeb.exe", L"AutoHotkeyWeb.exe" };
+    for (int i = 0; i < 2; i++)
+    {
+        wchar_t p[MAX_PATH]; _snwprintf_s(p, MAX_PATH, _TRUNCATE, L"%s%s", d, cand[i]);
+        wchar_t f[MAX_PATH]; GetFullPathNameW(p, MAX_PATH, f, NULL);
+        if (fileExists(f)) { wcsncpy_s(out, cch, f, _TRUNCATE); return; }
+    }
+    wchar_t inst[MAX_PATH]; DWORD sz = sizeof(inst);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\AutoHotkeyWeb", L"InstallDir", RRF_RT_REG_SZ, NULL, inst, &sz) == ERROR_SUCCESS)
+    {
+        _snwprintf_s(out, cch, _TRUNCATE, L"%s\\AutoHotkeyWeb.exe", inst);
+        if (fileExists(out)) return;
+    }
+    out[0] = 0;
+}
+
+static int ppAlreadyIncluded(PP *pp, const wchar_t *full)
+{
+    for (int i = 0; i < pp->nincl; i++) if (!_wcsicmp(pp->included[i], full)) return 1;
+    return 0;
+}
+
+/* <LibName>: Lib\LibName.ahk, or the prefix before the first underscore. */
+static int ppFindLib(PP *pp, const wchar_t *name, wchar_t *out, size_t cch)
+{
+    wchar_t nm[MAX_PATH]; wcsncpy_s(nm, MAX_PATH, name, _TRUNCATE);
+    for (int pass = 0; pass < 2; pass++)
+    {
+        if (pass == 1) { wchar_t *us = wcschr(nm, L'_'); if (!us) break; *us = 0; }
+        for (int i = 0; i < pp->nlib; i++)
+        {
+            _snwprintf_s(out, cch, _TRUNCATE, L"%s\\%s.ahk", pp->libDirs[i], nm);
+            if (fileExists(out)) return 1;
+        }
+    }
+    return 0;
+}
+
+static int ppFile(PP *pp, const wchar_t *path);
+
+/* FileInstall, Source, Dest  ->  remember Source (literal text) for embedding. */
+static int ppFileInstall(PP *pp, const wchar_t *args, const wchar_t *workDir)
+{
+    wchar_t src[MAX_PATH], rest[MAX_PATH * 2];
+    splitComma(args, src, rest, MAX_PATH);
+    unescape(src);
+    if (!src[0]) return 1;
+    if (wcschr(src, L'%')) { info(L"warning: FileInstall source with variables cannot be embedded: %s", src); return 1; }
+    wchar_t up[MAX_PATH]; wcsncpy_s(up, MAX_PATH, src, _TRUNCATE); _wcsupr_s(up, MAX_PATH);
+    for (int i = 0; i < pp->nfi; i++) if (!wcscmp(pp->fi[i].name, up)) return 1;
+    if (pp->nfi >= MAX_FI) return fail(L"too many FileInstall sources (max %d)", MAX_FI);
+    wchar_t full[MAX_PATH]; resolvePath(workDir, src, full, MAX_PATH);
+    if (!fileExists(full)) return fail(L"FileInstall: source file not found: %s", full);
+    wcscpy_s(pp->fi[pp->nfi].name, MAX_PATH, up);
+    wcscpy_s(pp->fi[pp->nfi].path, MAX_PATH, full);
+    pp->nfi++;
+    return 1;
+}
+
+static int ppText(PP *pp, const wchar_t *text, const wchar_t *filePath)
+{
+    wchar_t workDir[MAX_PATH]; dirOf(filePath, workDir, MAX_PATH);   /* #Include <dir> changes it */
+    int inComment = 0, keep = 0, ignore = 0;
+    const wchar_t *line = text;
+    while (*line)
+    {
+        const wchar_t *eol = line; while (*eol && *eol != L'\n') eol++;
+        const wchar_t *next = *eol ? eol + 1 : eol;
+        const wchar_t *s = line; while (s < eol && (*s == L' ' || *s == L'\t')) s++;
+        size_t sl = (size_t)(eol - s); while (sl && (s[sl-1] == L'\r' || s[sl-1] == L' ' || s[sl-1] == L'\t')) sl--;
+
+        /* ;@Ahk2Exe-IgnoreBegin ... IgnoreEnd : dropped from the compiled script */
+        int isWeb; wchar_t dn[64], da[1024];
+        if (parseDirectiveLine(line, eol, &isWeb, dn, 64, da, 1024))
+        {
+            if (!_wcsicmp(dn, L"IgnoreBegin")) { ignore = 1; line = next; continue; }
+            if (!_wcsicmp(dn, L"IgnoreEnd"))   { ignore = 0; line = next; continue; }
+        }
+        if (ignore) { line = next; continue; }
+
+        if (inComment || keep)
+        {
+            int closes = (sl >= 2 && s[0] == L'*' && s[1] == L'/');
+            if (keep)
+            {   /* Keep block: inner lines are emitted as code, the closing line is dropped */
+                if (closes) keep = 0; else wbAppend(&pp->out, line, (size_t)(next - line));
+                line = next; continue;
+            }
+            if (closes) inComment = 0;
+            wbAppend(&pp->out, line, (size_t)(next - line));
+            line = next; continue;
+        }
+        /* Block comment, or an "@Ahk2Exe-Keep" block whose content becomes live code when compiled */
+        if (sl >= 2 && s[0] == L'/' && s[1] == L'*')
+        {
+            if (sl >= 7 && (!_wcsnicmp(s + 2, L"@Ahk2Exe-Keep", 13) || !_wcsnicmp(s + 2, L"@AhkWeb-Keep", 12)))
+            { keep = 1; line = next; continue; }
+            inComment = !(sl >= 4 && s[sl-2] == L'*' && s[sl-1] == L'/');
+            wbAppend(&pp->out, line, (size_t)(next - line));
+            line = next; continue;
+        }
+
+        /* #Include / #IncludeAgain */
+        int again = 0; size_t kl = 0;
+        if (sl > 8 && !_wcsnicmp(s, L"#IncludeAgain", 13) && (sl == 13 || wcschr(L" \t,", s[13]))) { again = 1; kl = 13; }
+        else if (sl > 8 && !_wcsnicmp(s, L"#Include", 8) && (sl == 8 || wcschr(L" \t,", s[8]))) kl = 8;
+        if (kl)
+        {
+            wchar_t arg[MAX_PATH * 2]; size_t al = sl - kl; if (al >= MAX_PATH * 2) al = MAX_PATH * 2 - 1;
+            wmemcpy(arg, s + kl, al); arg[al] = 0;
+            for (wchar_t *c = arg; *c; c++)
+                if (*c == L';' && c > arg && (c[-1] == L' ' || c[-1] == L'\t')) { *c = 0; break; }
+            trimW(arg);
+            if (arg[0] == L',') { memmove(arg, arg + 1, wcslen(arg) * sizeof(wchar_t)); trimW(arg); }
+            int optional = 0;
+            if (!_wcsnicmp(arg, L"*i", 2) && (arg[2] == L' ' || arg[2] == L'\t')) { optional = 1; memmove(arg, arg + 3, (wcslen(arg + 3) + 1) * sizeof(wchar_t)); trimW(arg); }
+            wchar_t full[MAX_PATH];
+            size_t L = wcslen(arg);
+            if (L > 2 && arg[0] == L'<' && arg[L-1] == L'>')
+            {
+                arg[L-1] = 0;
+                if (!ppFindLib(pp, arg + 1, full, MAX_PATH))
+                { if (optional) { line = next; continue; } return fail(L"#Include: library <%s> not found (%s)", arg + 1, filePath); }
+            }
+            else
+            {
+                wchar_t ex[MAX_PATH * 2]; expandVarsEx(arg, ex, MAX_PATH * 2, pp->mainPath, filePath, pp->ahkExe);
+                resolvePath(workDir, ex, full, MAX_PATH);
+                if (dirExists(full))
+                {   /* directory: becomes the base for later relative #Includes */
+                    wcsncpy_s(workDir, MAX_PATH, full, _TRUNCATE);
+                    size_t wl = wcslen(workDir); if (wl && workDir[wl-1] != L'\\') wcscat_s(workDir, MAX_PATH, L"\\");
+                    line = next; continue;
+                }
+                if (!fileExists(full))
+                { if (optional) { line = next; continue; } return fail(L"#Include file not found: %s (in %s)", full, filePath); }
+            }
+            if (!again && ppAlreadyIncluded(pp, full)) { line = next; continue; }
+            if (!ppFile(pp, full)) return 0;
+            line = next; continue;
+        }
+
+        /* FileInstall, Source, Dest */
+        if (sl > 11 && !_wcsnicmp(s, L"FileInstall", 11) && wcschr(L" \t,", s[11]))
+        {
+            wchar_t a[MAX_PATH * 3]; size_t al = sl - 11; if (al >= MAX_PATH * 3) al = MAX_PATH * 3 - 1;
+            wmemcpy(a, s + 11, al); a[al] = 0; trimW(a);
+            if (a[0] == L',') { memmove(a, a + 1, wcslen(a) * sizeof(wchar_t)); trimW(a); }
+            if (!ppFileInstall(pp, a, workDir)) return 0;
+        }
+
+        wbAppend(&pp->out, line, (size_t)(next - line));
+        if (!*eol) wbAppend(&pp->out, L"\n", 1);
+        line = next;
+    }
+    return 1;
+}
+
+static int ppFile(PP *pp, const wchar_t *path)
+{
+    if (pp->depth > 64) return fail(L"#Include nesting too deep at %s", path);
+    if (pp->nincl >= MAX_INCF) return fail(L"too many #Include files");
+    pp->included[pp->nincl++] = _wcsdup(path);
+    wchar_t *text = readTextFileW(path);
+    if (!text) return fail(L"cannot read %s", path);
+    pp->depth++;
+    int ok = ppText(pp, text, path);
+    pp->depth--;
+    free(text);
+    if (ok && pp->out.len && pp->out.p[pp->out.len - 1] != L'\n') wbAppend(&pp->out, L"\n", 1);
+    return ok;
+}
+
+/* Merge the script with its includes and Lib functions. Returns the merged text
+ * (caller frees) or NULL with g_err set. */
+static wchar_t *preprocessScript(const wchar_t *mainPath, FIItem *fi, int *nfi)
+{
+    PP pp; memset(&pp, 0, sizeof(pp));
+    wcscpy_s(pp.mainPath, MAX_PATH, mainPath);
+    pp.fi = fi;
+    findInterpreter(pp.ahkExe, MAX_PATH);
+    /* Lib folders, in AutoHotkey's search order: script, user, interpreter */
+    wchar_t d[MAX_PATH]; dirOf(mainPath, d, MAX_PATH);
+    _snwprintf_s(pp.libDirs[pp.nlib++], MAX_PATH, _TRUNCATE, L"%sLib", d);
+    wchar_t docs[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, 0, docs)))
+        _snwprintf_s(pp.libDirs[pp.nlib++], MAX_PATH, _TRUNCATE, L"%s\\AutoHotkey\\Lib", docs);
+    if (pp.ahkExe[0]) { dirOf(pp.ahkExe, d, MAX_PATH); _snwprintf_s(pp.libDirs[pp.nlib++], MAX_PATH, _TRUNCATE, L"%sLib", d); }
+
+    int ok = ppFile(&pp, mainPath);
+
+    /* Lib auto-includes: ask the interpreter which library files the script needs
+     * (/iLib also syntax-checks the script, like Ahk2Exe does). */
+    if (ok && pp.ahkExe[0])
+    {
+        wchar_t tmpDir[MAX_PATH], ilib[MAX_PATH];
+        GetTempPathW(MAX_PATH, tmpDir);
+        _snwprintf_s(ilib, MAX_PATH, _TRUNCATE, L"%sahkw2e_ilib_%lu.ahk", tmpDir, GetCurrentProcessId());
+        DeleteFileW(ilib);
+        wchar_t cmd[MAX_PATH * 4];
+        _snwprintf_s(cmd, MAX_PATH * 4, _TRUNCATE, L"\"%s\" /ErrorStdOut /iLib \"%s\" \"%s\"", pp.ahkExe, ilib, mainPath);
+        static wchar_t outTxt[8192];
+        wchar_t scriptDir[MAX_PATH]; dirOf(mainPath, scriptDir, MAX_PATH);
+        int rc = runProcess(cmd, scriptDir, outTxt, 8192);
+        if (rc == -1) info(L"note: could not run %s for Lib auto-includes", pp.ahkExe);
+        else if (rc != 0 && outTxt[0]) { ok = fail(L"script error:\n%s", outTxt); }
+        else if (fileExists(ilib))
+        {
+            wchar_t *t = readTextFileW(ilib);
+            if (t)
+            {
+                if (wcsstr(t, L"#Include")) info(L"Lib auto-includes merged");
+                ok = ppText(&pp, t, mainPath);
+                free(t);
+            }
+        }
+        DeleteFileW(ilib);
+    }
+    else if (ok) info(L"note: AutoHotkeyWeb.exe not found - Lib auto-includes and syntax check skipped");
+
+    for (int i = 0; i < pp.nincl; i++) free(pp.included[i]);
+    *nfi = pp.nfi;
+    if (!ok) { free(pp.out.p); return NULL; }
+    if (!pp.out.p) wbAppend(&pp.out, L"", 0);
+    return pp.out.p;
 }
 
 /* -------------------------------------------------------------- resources -- */
@@ -551,6 +996,16 @@ static int writeIconGroup(HANDLE upd, HMODULE hb, LPCWSTR name, const unsigned c
     return ok ? 1 : fail(L"UpdateResource(icon group) failed (err %lu)", GetLastError());
 }
 
+typedef struct { unsigned char *data; DWORD len; } Blob;
+
+static int loadIco(const wchar_t *path, Blob *b, const wchar_t *what)
+{
+    b->data = readFile(path, &b->len);
+    if (!b->data) return fail(L"cannot read %s: %s", what, path);
+    if (!icoValidate(b->data, b->len)) return fail(L"not a valid .ico file (%s): %s", what, path);
+    return 1;
+}
+
 /* ---- VS_VERSIONINFO builder ---------------------------------------------- */
 typedef struct { unsigned char *p; size_t len, cap; } Buf;
 
@@ -601,7 +1056,7 @@ static void loadBaseVersion(const wchar_t *bin, VerInfo *v)
         WORD *tr;
         if (VerQueryValueW(buf, L"\\VarFileInfo\\Translation", (void **)&tr, &l) && l >= 4)
         { v->lang = tr[0]; v->cp = tr[1]; }
-        for (size_t i = 0; i < VI_STD_N; i++)
+        for (int i = 0; i < VI_STD_N; i++)
         {
             wchar_t q[128], *val;
             _snwprintf_s(q, 128, _TRUNCATE, L"\\StringFileInfo\\%04x%04x\\%s", v->lang, v->cp, VI_STD[i]);
@@ -663,136 +1118,272 @@ static int buildVersion(VerInfo *v, Buf *b)
     return b->p != NULL;
 }
 
-/* ---------------------------------------------------------------- compile -- */
-typedef struct { unsigned char *data; DWORD len; } Blob;
-
-static int compileScript(const Opts *src, wchar_t *outPath, size_t outCch)
+/* ---- manifest: requestedExecutionLevel ----------------------------------- */
+static int setRequireAdmin(HANDLE upd, HMODULE hb)
 {
-    Opts o = *src;
+    static const char *TRUST =
+        "<trustInfo xmlns=\"urn:schemas-microsoft-com:asm.v3\"><security><requestedPrivileges>"
+        "<requestedExecutionLevel level=\"requireAdministrator\" uiAccess=\"false\"/>"
+        "</requestedPrivileges></security></trustInfo>";
+    HRSRC r = hb ? FindResourceW(hb, MAKEINTRESOURCEW(1), RT_MANIFEST_W) : NULL;
+    char *m = NULL; size_t ml = 0;
+    if (r)
+    {
+        DWORD rs = SizeofResource(hb, r);
+        const char *src = (const char *)LockResource(LoadResource(hb, r));
+        m = (char *)malloc(rs + strlen(TRUST) + 64);
+        if (!m) return fail(L"out of memory");
+        memcpy(m, src, rs); m[rs] = 0; ml = rs;
+        char *lv = strstr(m, "level=\"");
+        if (lv)
+        {   /* swap whatever level is there for requireAdministrator */
+            char *q = lv + 7, *qe = strchr(q, '"');
+            if (qe)
+            {
+                const char *nv = "requireAdministrator"; size_t nl = strlen(nv), ol = (size_t)(qe - q);
+                memmove(q + nl, qe, ml - (size_t)(qe - m) + 1);
+                memcpy(q, nv, nl); ml = ml - ol + nl;
+            }
+        }
+        else
+        {
+            char *end = strstr(m, "</assembly>");
+            if (!end) { free(m); return fail(L"base manifest has no </assembly>"); }
+            size_t tl = strlen(TRUST);
+            memmove(end + tl, end, ml - (size_t)(end - m) + 1);
+            memcpy(end, TRUST, tl); ml += tl;
+        }
+    }
+    else
+    {
+        const char *H = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+                        "<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">";
+        ml = strlen(H) + strlen(TRUST) + 11;
+        m = (char *)malloc(ml + 1);
+        if (!m) return fail(L"out of memory");
+        sprintf_s(m, ml + 1, "%s%s</assembly>", H, TRUST);
+    }
+    int ok = replaceRaw(upd, hb, RT_MANIFEST_W, MAKEINTRESOURCEW(1), m, (DWORD)ml);
+    free(m);
+    return ok ? 1 : fail(L"UpdateResource(manifest) failed");
+}
+
+/* ---------------------------------------------------------------- signing -- */
+static int findSigntool(wchar_t *out, size_t cch)
+{
+    wchar_t base[MAX_PATH];
+    ExpandEnvironmentStringsW(L"%ProgramFiles(x86)%\\Windows Kits\\10\\bin", base, MAX_PATH);
+    wchar_t best[MAX_PATH] = L"", pat[MAX_PATH];
+    _snwprintf_s(pat, MAX_PATH, _TRUNCATE, L"%s\\10.*", base);
+    WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(pat, &fd);
+    if (h != INVALID_HANDLE_VALUE)
+    {
+        do {
+            wchar_t p[MAX_PATH];
+            _snwprintf_s(p, MAX_PATH, _TRUNCATE, L"%s\\%s\\x64\\signtool.exe", base, fd.cFileName);
+            if (fileExists(p) && wcscmp(p, best) > 0) wcscpy_s(best, MAX_PATH, p);
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    if (!best[0]) { _snwprintf_s(best, MAX_PATH, _TRUNCATE, L"%s\\x64\\signtool.exe", base); if (!fileExists(best)) best[0] = 0; }
+    if (!best[0]) { wchar_t *fp; if (!SearchPathW(NULL, L"signtool.exe", NULL, MAX_PATH, best, &fp)) best[0] = 0; }
+    wcsncpy_s(out, cch, best, _TRUNCATE);
+    return best[0] != 0;
+}
+
+static int signFile(const Opts *o, const wchar_t *file)
+{
+    wchar_t st[MAX_PATH];
+    if (!findSigntool(st, MAX_PATH))
+        return fail(L"code signing: signtool.exe not found (install the Windows SDK \"Signing Tools\")");
+    wchar_t who[MAX_PATH + 160];
+    if (o->signPfx[0])
+    {
+        if (o->signPass[0]) _snwprintf_s(who, MAX_PATH + 160, _TRUNCATE, L"/f \"%s\" /p \"%s\"", o->signPfx, o->signPass);
+        else                _snwprintf_s(who, MAX_PATH + 160, _TRUNCATE, L"/f \"%s\"", o->signPfx);
+    }
+    else if (o->signSubject[0]) _snwprintf_s(who, MAX_PATH + 160, _TRUNCATE, L"/n \"%s\"", o->signSubject);
+    else wcscpy_s(who, MAX_PATH + 160, L"/a");
+    static wchar_t outTxt[4096];
+    wchar_t cmd[4096];
+    for (int attempt = 0; attempt < 2; attempt++)
+    {
+        int withTs = (attempt == 0 && o->signTs[0]);
+        if (withTs) _snwprintf_s(cmd, 4096, _TRUNCATE, L"\"%s\" sign /fd SHA256 %s /tr \"%s\" /td SHA256 \"%s\"", st, who, o->signTs, file);
+        else        _snwprintf_s(cmd, 4096, _TRUNCATE, L"\"%s\" sign /fd SHA256 %s \"%s\"", st, who, file);
+        int rc = runProcess(cmd, NULL, outTxt, 4096);
+        if (rc == 0) { info(withTs ? L"signed: %s" : L"signed (no timestamp): %s", fileNameOf(file)); return 1; }
+        if (!withTs) break;
+        info(L"warning: signing with timestamp failed, retrying without timestamp");
+    }
+    return fail(L"code signing failed for %s:\n%s", fileNameOf(file), outTxt);
+}
+
+/* ;@Ahk2Exe-PostExec <command>: %A_WorkFileName% = the produced exe. */
+static void runPostExec(const Opts *o, const wchar_t *exe, const wchar_t *scriptPath)
+{
+    for (int i = 0; i < o->npost; i++)
+    {
+        wchar_t c1[2048] = L"", c2[2048];
+        const wchar_t *s = o->postExec[i]; size_t k = 0;
+        while (*s && k + 1 < 2048)
+        {
+            if (!_wcsnicmp(s, L"%A_WorkFileName%", 16))
+            { for (const wchar_t *v = exe; *v && k + 1 < 2048; ) c1[k++] = *v++; s += 16; }
+            else c1[k++] = *s++;
+        }
+        c1[k] = 0;
+        expandVars(c1, c2, 2048, scriptPath);
+        static wchar_t outTxt[4096];
+        wchar_t sd[MAX_PATH]; dirOf(scriptPath, sd, MAX_PATH);
+        int rc = runProcess(c2, sd, outTxt, 4096);
+        if (rc == -1)
+        {
+            wchar_t viaCmd[2100]; _snwprintf_s(viaCmd, 2100, _TRUNCATE, L"cmd.exe /c %s", c2);
+            rc = runProcess(viaCmd, sd, outTxt, 4096);
+        }
+        if (rc == 0) info(L"PostExec ok: %s", c2);
+        else info(L"warning: PostExec exit %d: %s\n%s", rc, c2, outTxt);
+    }
+}
+
+/* ------------------------------------------------------------- build .exe -- */
+static int finishZip(mz_zip_archive *zip, void **buf, size_t *size)
+{
+    if (!mz_zip_writer_finalize_heap_archive(zip, buf, size)) { mz_zip_writer_end(zip); return fail(L"zip finalize failed"); }
+    mz_zip_writer_end(zip);
+    return 1;
+}
+
+static int buildExe(const Opts *o, const wchar_t *merged, const FIItem *fi, int nfi,
+                    const wchar_t *assetsDir, int embedIncludes)
+{
     int ok = 0, outCreated = 0;
-    unsigned char *script = NULL, *encBuf = NULL;
-    wchar_t *wscript = NULL;
-    void *zipBuf = NULL; size_t zipSize = 0;
+    unsigned char *u8 = NULL, *encBuf = NULL;
+    void *zipBuf = NULL, *filesBuf = NULL; size_t zipSize = 0, filesSize = 0;
     HMODULE hb = NULL; HANDLE upd = NULL;
-    Blob mainIco = {0}, resData[MAX_RES] = {0};
+    Blob ico[4] = {0}, resData[MAX_RES] = {0}, fiData[MAX_FI] = {0};
     Buf ver = {0};
-    g_err[0] = 0;
+    const wchar_t *icoPath[4] = { o->icon, o->suspendIcon, o->pauseIcon, o->pauseSuspendIcon };
+    static const WORD icoId[4] = { IDI_MAIN_GROUP, IDI_SUSPEND, IDI_PAUSE, IDI_PAUSE_SUSP };
+    static const wchar_t *icoWhat[4] = { L"icon", L"suspend icon", L"pause icon", L"pause+suspend icon" };
 
-    if (!o.in[0]) { fail(L"no script specified (/in)"); goto done; }
-    wchar_t inFull[MAX_PATH]; GetFullPathNameW(o.in, MAX_PATH, inFull, NULL);
-    wchar_t scriptDir[MAX_PATH]; dirOf(inFull, scriptDir, MAX_PATH);
+    if (!fileExists(o->bin))
+    { fail(L"base file not found: %s (build the engine Self-contained|x64 config first)", o->bin); goto done; }
+    if (!_wcsicmp(o->out, o->in) || !_wcsicmp(o->out, o->bin)) { fail(L"output path must differ from script/base"); goto done; }
 
-    /* 1) Read the script; strip a UTF-8 BOM if present. */
-    DWORD slen = 0;
-    script = readFile(inFull, &slen);
-    if (!script) { fail(L"cannot read script: %s", inFull); goto done; }
-    unsigned char *sp = script; DWORD sl = slen;
-    if (sl >= 3 && sp[0] == 0xEF && sp[1] == 0xBB && sp[2] == 0xBF) { sp += 3; sl -= 3; }
-
-    /* 2) Directives (UTF-8, fall back to ANSI). */
+    /* 1) Load and validate everything BEFORE touching the output. */
+    for (int i = 0; i < 4; i++) if (icoPath[i][0] && !loadIco(icoPath[i], &ico[i], icoWhat[i])) goto done;
+    for (int i = 0; i < o->nres; i++)
     {
-        UINT cp = CP_UTF8;
-        int wn = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (const char *)sp, (int)sl, NULL, 0);
-        if (!wn && sl) { cp = CP_ACP; wn = MultiByteToWideChar(CP_ACP, 0, (const char *)sp, (int)sl, NULL, 0); }
-        wscript = (wchar_t *)malloc(((size_t)wn + 1) * sizeof(wchar_t));
-        if (!wscript) { fail(L"out of memory"); goto done; }
-        if (wn) MultiByteToWideChar(cp, 0, (const char *)sp, (int)sl, wscript, wn);
-        wscript[wn] = 0;
+        resData[i].data = readFile(o->res[i].path, &resData[i].len);
+        if (!resData[i].data) { fail(L"AddResource: cannot read %s", o->res[i].path); goto done; }
+        if (!o->res[i].type && endsWithI(o->res[i].path, L".ico") && !icoValidate(resData[i].data, resData[i].len))
+        { fail(L"AddResource: not a valid .ico file: %s", o->res[i].path); goto done; }
     }
-    wchar_t assetsDir[MAX_PATH] = L"";
-    parseDirectives(wscript, inFull, &o, assetsDir, MAX_PATH);
-
-    if (!o.out[0]) deriveOut(inFull, o.out, MAX_PATH);
-    else { wchar_t t[MAX_PATH]; GetFullPathNameW(o.out, MAX_PATH, t, NULL); wcscpy_s(o.out, MAX_PATH, t); }
-    if (!o.bin[0]) defaultBin(o.bin, MAX_PATH);
-    if (outPath) wcsncpy_s(outPath, outCch, o.out, _TRUNCATE);
-
-    if (!fileExists(o.bin))
-    { fail(L"base file not found: %s (build the engine Self-contained|x64 config first)", o.bin); goto done; }
-    if (!_wcsicmp(o.out, inFull) || !_wcsicmp(o.out, o.bin)) { fail(L"output path must differ from script/base"); goto done; }
-
-    /* 3) Load and validate icon / resource files BEFORE touching the output. */
-    if (o.icon[0])
+    for (int i = 0; i < nfi; i++)
     {
-        mainIco.data = readFile(o.icon, &mainIco.len);
-        if (!mainIco.data) { fail(L"cannot read icon: %s", o.icon); goto done; }
-        if (!icoValidate(mainIco.data, mainIco.len)) { fail(L"not a valid .ico file: %s", o.icon); goto done; }
-    }
-    for (int i = 0; i < o.nres; i++)
-    {
-        resData[i].data = readFile(o.res[i].path, &resData[i].len);
-        if (!resData[i].data) { fail(L"AddResource: cannot read %s", o.res[i].path); goto done; }
-        if (!o.res[i].type && endsWithI(o.res[i].path, L".ico") && !icoValidate(resData[i].data, resData[i].len))
-        { fail(L"AddResource: not a valid .ico file: %s", o.res[i].path); goto done; }
+        fiData[i].data = readFile(fi[i].path, &fiData[i].len);
+        if (!fiData[i].data) { fail(L"FileInstall: cannot read %s", fi[i].path); goto done; }
     }
 
-    /* 4) Optional: zip the ;@AhkWeb-Assets folder into memory. */
+    /* 2) ;@AhkWeb-Assets folder -> zip */
     if (assetsDir[0])
     {
-        DWORD a = GetFileAttributesW(assetsDir);
-        if (a == INVALID_FILE_ATTRIBUTES || !(a & FILE_ATTRIBUTE_DIRECTORY))
-        { fail(L"assets folder not found: %s", assetsDir); goto done; }
+        if (!dirExists(assetsDir)) { fail(L"assets folder not found: %s", assetsDir); goto done; }
         mz_zip_archive zip; memset(&zip, 0, sizeof(zip));
         if (!mz_zip_writer_init_heap(&zip, 0, 0)) { fail(L"zip init failed"); goto done; }
-        if (!zipAddFolder(&zip, assetsDir, L"")) { mz_zip_writer_end(&zip); if (!g_err[0]) fail(L"failed to add assets"); goto done; }
-        if (!mz_zip_writer_finalize_heap_archive(&zip, &zipBuf, &zipSize)) { mz_zip_writer_end(&zip); fail(L"zip finalize failed"); goto done; }
-        mz_zip_writer_end(&zip);
+        if (!zipAddFolder(&zip, assetsDir, L"", NULL)) { mz_zip_writer_end(&zip); goto done; }
+        if (!finishZip(&zip, &zipBuf, &zipSize)) goto done;
         info(L"embedded assets from %s (%zu bytes zipped)", assetsDir, zipSize);
     }
 
-    /* 5) Obfuscate + compress the script into the AHKW1 container (script_crypt.h). */
+    /* 3) ;@AhkWeb-Include files -> zip (single-exe mode only) */
+    if (embedIncludes && o->ninc)
+    {
+        mz_zip_archive zip; memset(&zip, 0, sizeof(zip));
+        unsigned long long total = 0;
+        if (!mz_zip_writer_init_heap(&zip, 0, 0)) { fail(L"zip init failed"); goto done; }
+        for (int i = 0; i < o->ninc; i++)
+            if (!zipAddInclude(&zip, &o->inc[i], &total)) { mz_zip_writer_end(&zip); goto done; }
+        if (!finishZip(&zip, &filesBuf, &filesSize)) goto done;
+        info(L"bundled %d item(s): %llu bytes -> %zu zipped, extract to %s (%s)",
+             o->ninc, total, filesSize, o->extractTo, o->extractMode);
+    }
+
+    /* 4) Script -> UTF-8 -> AHKW1 container (script_crypt.h). */
     DWORD scriptOutLen;
     {
+        int ul = WideCharToMultiByte(CP_UTF8, 0, merged, -1, NULL, 0, NULL, NULL);
+        u8 = (unsigned char *)malloc(ul > 0 ? ul : 1);
+        if (!u8) { fail(L"out of memory"); goto done; }
+        WideCharToMultiByte(CP_UTF8, 0, merged, -1, (char *)u8, ul, NULL, NULL);
+        DWORD sl = ul > 0 ? (DWORD)(ul - 1) : 0;
         mz_ulong bound = mz_compressBound(sl ? sl : 1);
         encBuf = (unsigned char *)malloc(AHKW_SCRIPT_HDR_LEN + bound);
         if (!encBuf) { fail(L"out of memory"); goto done; }
         mz_ulong compLen = bound;
-        if (mz_compress2(encBuf + AHKW_SCRIPT_HDR_LEN, &compLen, sp, sl, MZ_BEST_COMPRESSION) != MZ_OK)
+        if (mz_compress2(encBuf + AHKW_SCRIPT_HDR_LEN, &compLen, u8, sl, MZ_BEST_COMPRESSION) != MZ_OK)
         { fail(L"script compress failed"); goto done; }
         ahkw_write_header(encBuf, (uint32_t)sl);
         ahkw_xor_keystream(encBuf + AHKW_SCRIPT_HDR_LEN, (uint32_t)compLen, AHKW_SCRIPT_SEED ^ (uint64_t)sl);
         scriptOutLen = AHKW_SCRIPT_HDR_LEN + (DWORD)compLen;
     }
 
-    /* 6) Version info: base strings + explicit overrides (only if anything was set). */
-    if (o.nvi)
+    /* 5) Version info: base strings + overrides (only if anything was set). */
+    if (o->nvi)
     {
-        VerInfo vi; loadBaseVersion(o.bin, &vi);
-        for (int i = 0; i < o.nvi; i++) viSet(vi.s, &vi.n, o.vi[i].key, o.vi[i].val);
+        VerInfo vi; loadBaseVersion(o->bin, &vi);
+        for (int i = 0; i < o->nvi; i++) viSet(vi.s, &vi.n, o->vi[i].key, o->vi[i].val);
         if (!buildVersion(&vi, &ver)) { fail(L"out of memory (version)"); goto done; }
     }
 
-    /* 7) Copy base -> output (creating the destination folder if needed). */
-    { wchar_t od[MAX_PATH]; dirOf(o.out, od, MAX_PATH); if (od[0]) SHCreateDirectoryExW(NULL, od, NULL); }
-    if (!CopyFileW(o.bin, o.out, FALSE))
-    { fail(L"cannot write output %s (err %lu) - is it running?", o.out, GetLastError()); goto done; }
+    /* 6) Copy base -> output (creating the destination folder if needed). */
+    { wchar_t od[MAX_PATH]; dirOf(o->out, od, MAX_PATH); if (od[0]) SHCreateDirectoryExW(NULL, od, NULL); }
+    if (!CopyFileW(o->bin, o->out, FALSE))
+    { fail(L"cannot write output %s (err %lu) - is it running?", o->out, GetLastError()); goto done; }
     outCreated = 1;
-    SetFileAttributesW(o.out, FILE_ATTRIBUTE_NORMAL);
+    SetFileAttributesW(o->out, FILE_ATTRIBUTE_NORMAL);
 
-    hb = LoadLibraryExW(o.bin, NULL, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+    hb = LoadLibraryExW(o->bin, NULL, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
     WORD nextIconId = 0;
     if (hb) EnumResourceNamesW(hb, RT_ICON_W, maxIdCb, (LONG_PTR)&nextIconId);
     nextIconId++;
 
-    /* 8) Embed resources in one update session. */
-    upd = BeginUpdateResourceW(o.out, FALSE);
+    /* 7) Embed resources in one update session. */
+    upd = BeginUpdateResourceW(o->out, FALSE);
     if (!upd) { fail(L"BeginUpdateResource failed (err %lu)", GetLastError()); goto done; }
 
     if (!UpdateResourceW(upd, RT_RCDATA_W, RES_SCRIPT, LANG_NEUTRAL_ID, encBuf, scriptOutLen))
     { fail(L"UpdateResource(script) failed"); goto done; }
-    if (zipBuf && zipSize &&
-        !UpdateResourceW(upd, RT_RCDATA_W, RES_ASSETS, LANG_NEUTRAL_ID, zipBuf, (DWORD)zipSize))
+    if (zipBuf && !UpdateResourceW(upd, RT_RCDATA_W, RES_ASSETS, LANG_NEUTRAL_ID, zipBuf, (DWORD)zipSize))
     { fail(L"UpdateResource(assets) failed"); goto done; }
-
-    if (mainIco.data)
+    if (filesBuf)
     {
-        if (!writeIconGroup(upd, hb, MAKEINTRESOURCEW(IDI_MAIN_GROUP), mainIco.data, &nextIconId)) goto done;
-        info(L"icon: %s", o.icon);
+        wchar_t cfg[MAX_PATH + 128];
+        _snwprintf_s(cfg, MAX_PATH + 128, _TRUNCATE, L"dest=%s\nmode=%s\ncleanup=%d\n",
+                     o->extractTo, o->extractMode, o->keepFiles ? 0 : 1);
+        if (!UpdateResourceW(upd, RT_RCDATA_W, RES_FILES, LANG_NEUTRAL_ID, filesBuf, (DWORD)filesSize) ||
+            !UpdateResourceW(upd, RT_RCDATA_W, RES_FILESCFG, LANG_NEUTRAL_ID, cfg, (DWORD)(wcslen(cfg) * sizeof(wchar_t))))
+        { fail(L"UpdateResource(files) failed"); goto done; }
+    }
+    for (int i = 0; i < nfi; i++)
+    {
+        if (!UpdateResourceW(upd, RT_RCDATA_W, fi[i].name, LANG_NEUTRAL_ID, fiData[i].data, fiData[i].len))
+        { fail(L"UpdateResource(FileInstall %s) failed", fi[i].path); goto done; }
+    }
+    if (nfi) info(L"FileInstall: %d file(s) embedded", nfi);
+
+    for (int i = 0; i < 4; i++)
+    {
+        if (!ico[i].data) continue;
+        if (!writeIconGroup(upd, hb, MAKEINTRESOURCEW(icoId[i]), ico[i].data, &nextIconId)) goto done;
+        info(L"%s: %s", icoWhat[i], icoPath[i]);
     }
 
-    for (int i = 0; i < o.nres; i++)
+    for (int i = 0; i < o->nres; i++)
     {
-        const ResItem *r = &o.res[i];
+        const ResItem *r = &o->res[i];
         LPCWSTR nm = r->nameIsInt ? MAKEINTRESOURCEW(r->nameInt) : r->name;
         unsigned char *d = resData[i].data; DWORD dl = resData[i].len;
         LPCWSTR type;
@@ -810,7 +1401,7 @@ static int compileScript(const Opts *src, wchar_t *outPath, size_t outCch)
             if (dl > 14 && d[0] == 'B' && d[1] == 'M') { d += 14; dl -= 14; }   /* strip BITMAPFILEHEADER */
         }
         else if (endsWithI(r->path, L".htm") || endsWithI(r->path, L".html")) type = MAKEINTRESOURCEW(23);
-        else if (endsWithI(r->path, L".manifest")) type = MAKEINTRESOURCEW(24);
+        else if (endsWithI(r->path, L".manifest")) type = RT_MANIFEST_W;
         else type = RT_RCDATA_W;
         if (!replaceRaw(upd, hb, type, nm, d, dl)) { fail(L"AddResource failed for %s", r->path); goto done; }
         info(L"resource added: %s", r->path);
@@ -822,275 +1413,202 @@ static int compileScript(const Opts *src, wchar_t *outPath, size_t outCch)
         { fail(L"UpdateResource(version) failed"); goto done; }
         info(L"version info updated");
     }
+    if (o->requireAdmin)
+    {
+        if (!setRequireAdmin(upd, hb)) goto done;
+        info(L"manifest: requireAdministrator");
+    }
 
     if (!EndUpdateResourceW(upd, FALSE)) { upd = NULL; fail(L"EndUpdateResource failed (err %lu)", GetLastError()); goto done; }
     upd = NULL;
-    /* Make Explorer pick up the new icon instead of a cached one. */
-    SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, o.out, NULL);
-    info(L"wrote %s (script encoded)", o.out);
+    SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, o->out, NULL);
+    info(L"wrote %s", o->out);
     ok = 1;
 
 done:
     if (upd) EndUpdateResourceW(upd, TRUE);
     if (hb) FreeLibrary(hb);
-    if (!ok && outCreated) DeleteFileW(o.out);
+    if (!ok && outCreated) DeleteFileW(o->out);
     free(ver.p);
-    free(mainIco.data);
+    for (int i = 0; i < 4; i++) free(ico[i].data);
     for (int i = 0; i < MAX_RES; i++) free(resData[i].data);
+    for (int i = 0; i < MAX_FI; i++) free(fiData[i].data);
     if (zipBuf) mz_free(zipBuf);
+    if (filesBuf) mz_free(filesBuf);
     free(encBuf);
-    free(wscript);
-    free(script);
+    free(u8);
     return ok;
 }
 
-/* -------------------------------------------------------------------- GUI -- */
-enum {
-    ID_SRC = 101, ID_SRC_BR, ID_OUT, ID_OUT_BR, ID_ICO, ID_ICO_BR, ID_ICO_DEF, ID_BIN, ID_BIN_BR,
-    ID_DESC, ID_VER, ID_PROD, ID_COMP, ID_COPY, ID_PREVIEW, ID_CONVERT, ID_CLOSE, ID_STATUS
-};
-static const wchar_t *REG_KEY = L"Software\\AutoHotkeyWeb\\AhkWeb2Exe";
-static HWND  g_wnd;
-static HFONT g_font;
-static HICON g_preview;
-static double g_scale = 1.0;
-static int   g_outAuto = 1, g_settingOut = 0;
-static wchar_t g_initSrc[MAX_PATH];
-
-#define S(x) ((int)((x) * g_scale + 0.5))
-
-static void getText(int id, wchar_t *buf, int cch) { GetDlgItemTextW(g_wnd, id, buf, cch); trimW(buf); }
-
-static void regGet(const wchar_t *name, wchar_t *buf, DWORD cch)
+/* ---------------------------------------------------------- build setup -- */
+/* Setup.exe = AhkWebSetup.bin (native wizard) + cfg + license + payload zip
+ * (the app exe and the Include items, installed side by side). */
+static void appendCfg(wchar_t *cfg, size_t cch, const wchar_t *k, const wchar_t *v)
 {
-    DWORD sz = cch * sizeof(wchar_t); buf[0] = 0;
-    if (RegGetValueW(HKEY_CURRENT_USER, REG_KEY, name, RRF_RT_REG_SZ, NULL, buf, &sz) != ERROR_SUCCESS) buf[0] = 0;
-}
-static void regSet(const wchar_t *name, const wchar_t *val)
-{
-    RegSetKeyValueW(HKEY_CURRENT_USER, REG_KEY, name, REG_SZ, val, (DWORD)((wcslen(val) + 1) * sizeof(wchar_t)));
+    wchar_t line[600]; _snwprintf_s(line, 600, _TRUNCATE, L"%s=%s\n", k, v);
+    for (wchar_t *p = line + wcslen(k) + 1; *p && *p != L'\n'; p++) if (*p == L'\r') *p = L' ';
+    wcscat_s(cfg, cch, line);
 }
 
-static void updatePreview(void)
+static int buildSetup(Opts *o, const wchar_t *exePath, const wchar_t *setupOut)
 {
-    wchar_t ico[MAX_PATH], bin[MAX_PATH];
-    getText(ID_ICO, ico, MAX_PATH); getText(ID_BIN, bin, MAX_PATH);
-    if (!bin[0]) defaultBin(bin, MAX_PATH);
-    HICON h = NULL; int sz = S(32);
-    if (ico[0]) h = (HICON)LoadImageW(NULL, ico, IMAGE_ICON, sz, sz, LR_LOADFROMFILE);
-    else
+    int ok = 0, outCreated = 0;
+    void *pay = NULL; size_t paySize = 0;
+    wchar_t *lic = NULL; HANDLE upd = NULL; HMODULE hs = NULL;
+    Blob ico = {0}; Buf ver = {0};
+    wchar_t stub[MAX_PATH], cd[MAX_PATH]; compilerDir(cd, MAX_PATH);
+    _snwprintf_s(stub, MAX_PATH, _TRUNCATE, L"%sAhkWebSetup.bin", cd);
+    if (!fileExists(stub)) { fail(L"setup stub not found: %s (run build_compiler.bat)", stub); goto done; }
+
+    /* names */
+    const wchar_t *exeName = fileNameOf(exePath);
+    wchar_t appName[128], publisher[128], dirName[128], version[64];
+    wcsncpy_s(appName, 128, o->appName[0] ? o->appName : viGet(o->vi, o->nvi, L"ProductName"), _TRUNCATE);
+    if (!appName[0]) { wcsncpy_s(appName, 128, exeName, _TRUNCATE); wchar_t *d = wcsrchr(appName, L'.'); if (d) *d = 0; }
+    wcsncpy_s(publisher, 128, o->publisher[0] ? o->publisher : viGet(o->vi, o->nvi, L"CompanyName"), _TRUNCATE);
+    wcsncpy_s(dirName, 128, o->installDir[0] ? o->installDir : appName, _TRUNCATE);
+    for (wchar_t *p = dirName; *p; p++) if (wcschr(L"/:*?\"<>|", *p)) *p = L'_';
+    wcsncpy_s(version, 64, viGet(o->vi, o->nvi, L"ProductVersion"), _TRUNCATE);
+    if (!version[0]) wcsncpy_s(version, 64, viGet(o->vi, o->nvi, L"FileVersion"), _TRUNCATE);
+    if (!version[0]) wcscpy_s(version, 64, L"1.0");
+
+    /* payload */
+    unsigned long long total = 0;
     {
-        HMODULE m = LoadLibraryExW(bin, NULL, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
-        if (m) { h = (HICON)LoadImageW(m, MAKEINTRESOURCEW(IDI_MAIN_GROUP), IMAGE_ICON, sz, sz, 0); FreeLibrary(m); }
+        mz_zip_archive zip; memset(&zip, 0, sizeof(zip));
+        if (!mz_zip_writer_init_heap(&zip, 0, 0)) { fail(L"zip init failed"); goto done; }
+        if (!zipAddFile(&zip, exePath, exeName, &total)) { mz_zip_writer_end(&zip); goto done; }
+        for (int i = 0; i < o->ninc; i++)
+            if (!zipAddInclude(&zip, &o->inc[i], &total)) { mz_zip_writer_end(&zip); goto done; }
+        if (!finishZip(&zip, &pay, &paySize)) goto done;
     }
-    SendDlgItemMessageW(g_wnd, ID_PREVIEW, STM_SETICON, (WPARAM)h, 0);
-    if (g_preview) DestroyIcon(g_preview);
-    g_preview = h;
-}
 
-static void setStatus(const wchar_t *s) { SetDlgItemTextW(g_wnd, ID_STATUS, s); }
-
-static void setSource(const wchar_t *path)
-{
-    SetDlgItemTextW(g_wnd, ID_SRC, path);   /* EN_CHANGE derives the output */
-}
-
-static int browse(int editId, int save, const wchar_t *filter, const wchar_t *defExt)
-{
-    wchar_t file[MAX_PATH]; getText(editId, file, MAX_PATH);
-    wchar_t dir[MAX_PATH] = L"";
-    if (file[0]) { dirOf(file, dir, MAX_PATH); wchar_t *fn = wcsrchr(file, L'\\'); if (fn) memmove(file, fn + 1, (wcslen(fn + 1) + 1) * sizeof(wchar_t)); }
-    else if (editId == ID_SRC) regGet(L"LastDir", dir, MAX_PATH);
-    OPENFILENAMEW of; memset(&of, 0, sizeof(of));
-    of.lStructSize = sizeof(of); of.hwndOwner = g_wnd;
-    of.lpstrFilter = filter; of.lpstrFile = file; of.nMaxFile = MAX_PATH;
-    of.lpstrInitialDir = dir[0] ? dir : NULL; of.lpstrDefExt = defExt;
-    of.Flags = OFN_NOCHANGEDIR | OFN_PATHMUSTEXIST | (save ? OFN_OVERWRITEPROMPT : OFN_FILEMUSTEXIST);
-    if (!(save ? GetSaveFileNameW(&of) : GetOpenFileNameW(&of))) return 0;
-    if (editId == ID_SRC) setSource(file); else SetDlgItemTextW(g_wnd, editId, file);
-    return 1;
-}
-
-static void doConvert(void)
-{
-    static Opts o; memset(&o, 0, sizeof(o));
-    getText(ID_SRC, o.in, MAX_PATH);
-    getText(ID_OUT, o.out, MAX_PATH);
-    getText(ID_ICO, o.icon, MAX_PATH);
-    getText(ID_BIN, o.bin, MAX_PATH);
-    if (!o.in[0]) { MessageBoxW(g_wnd, L"컴파일할 스크립트를 선택하세요.", L"AhkWeb2Exe", MB_ICONWARNING); return; }
-
-    static const struct { int id; const wchar_t *key; } F[] = {
-        { ID_DESC, L"FileDescription" }, { ID_PROD, L"ProductName" },
-        { ID_COMP, L"CompanyName" }, { ID_COPY, L"LegalCopyright" },
-    };
-    wchar_t v[256];
-    for (size_t i = 0; i < sizeof(F) / sizeof(F[0]); i++)
-    { getText(F[i].id, v, 256); if (v[0]) viSet(o.vi, &o.nvi, F[i].key, v); }
-    getText(ID_VER, v, 256);
-    if (v[0]) { viSet(o.vi, &o.nvi, L"FileVersion", v); viSet(o.vi, &o.nvi, L"ProductVersion", v); }
-
-    setStatus(L"컴파일 중...");
-    HCURSOR old = SetCursor(LoadCursorW(NULL, IDC_WAIT));
-    g_log[0] = 0;
-    wchar_t out[MAX_PATH] = L"";
-    int ok = compileScript(&o, out, MAX_PATH);
-    SetCursor(old);
-
-    if (ok)
+    /* license */
+    if (o->license[0])
     {
-        wchar_t d[MAX_PATH]; dirOf(o.in, d, MAX_PATH); regSet(L"LastDir", d);
-        regSet(L"LastIcon", o.icon);
-        wchar_t defb[MAX_PATH]; defaultBin(defb, MAX_PATH);
-        regSet(L"LastBin", _wcsicmp(o.bin, defb) ? o.bin : L"");
-        setStatus(L"컴파일 완료");
-        wchar_t m[4096 + MAX_PATH + 64];
-        _snwprintf_s(m, sizeof(m) / sizeof(m[0]), _TRUNCATE, L"컴파일 완료:\n%s\n\n%s", out, g_log);
-        MessageBoxW(g_wnd, m, L"AhkWeb2Exe", MB_ICONINFORMATION);
+        lic = readTextFileW(o->license);
+        if (!lic) { fail(L"cannot read license file: %s", o->license); goto done; }
     }
-    else
+
+    /* icon: app icon if set, otherwise the stub keeps its own */
+    if (o->icon[0] && !loadIco(o->icon, &ico, L"icon")) goto done;
+
+    /* version info of the setup itself */
     {
-        setStatus(L"컴파일 실패");
-        wchar_t m[1200]; _snwprintf_s(m, 1200, _TRUNCATE, L"컴파일 실패:\n%s", g_err);
-        MessageBoxW(g_wnd, m, L"AhkWeb2Exe", MB_ICONERROR);
+        VerInfo vi; loadBaseVersion(stub, &vi);
+        wchar_t desc[200]; _snwprintf_s(desc, 200, _TRUNCATE, L"%s Setup", appName);
+        viSet(vi.s, &vi.n, L"FileDescription", desc);
+        viSet(vi.s, &vi.n, L"ProductName", appName);
+        viSet(vi.s, &vi.n, L"FileVersion", version);
+        viSet(vi.s, &vi.n, L"ProductVersion", version);
+        if (publisher[0]) viSet(vi.s, &vi.n, L"CompanyName", publisher);
+        const wchar_t *cp = viGet(o->vi, o->nvi, L"LegalCopyright");
+        if (cp[0]) viSet(vi.s, &vi.n, L"LegalCopyright", cp);
+        wchar_t on[MAX_PATH]; wcsncpy_s(on, MAX_PATH, fileNameOf(setupOut), _TRUNCATE);
+        viSet(vi.s, &vi.n, L"OriginalFilename", on);
+        if (!buildVersion(&vi, &ver)) { fail(L"out of memory"); goto done; }
     }
+
+    /* config */
+    wchar_t cfg[4096] = L"", num[32], appId[160];
+    _snwprintf_s(appId, 160, _TRUNCATE, L"AhkWeb_%s", appName);
+    for (wchar_t *p = appId; *p; p++) if (!iswalnum(*p) && *p != L'_' && *p != L'-' && *p != L'.') *p = L'_';
+    appendCfg(cfg, 4096, L"name", appName);
+    appendCfg(cfg, 4096, L"version", version);
+    appendCfg(cfg, 4096, L"publisher", publisher);
+    appendCfg(cfg, 4096, L"exe", exeName);
+    appendCfg(cfg, 4096, L"dir", dirName);
+    appendCfg(cfg, 4096, L"appid", appId);
+    appendCfg(cfg, 4096, L"scope", o->perMachine ? L"machine" : L"user");
+    appendCfg(cfg, 4096, L"desktop", o->scDesktop ? L"1" : L"0");
+    appendCfg(cfg, 4096, L"startmenu", o->scStartMenu ? L"1" : L"0");
+    appendCfg(cfg, 4096, L"run", o->runAfterInstall ? L"1" : L"0");
+    _snwprintf_s(num, 32, _TRUNCATE, L"%llu", (total + 1023) / 1024);
+    appendCfg(cfg, 4096, L"sizekb", num);
+
+    /* write */
+    { wchar_t od[MAX_PATH]; dirOf(setupOut, od, MAX_PATH); if (od[0]) SHCreateDirectoryExW(NULL, od, NULL); }
+    if (!CopyFileW(stub, setupOut, FALSE)) { fail(L"cannot write %s (err %lu)", setupOut, GetLastError()); goto done; }
+    outCreated = 1;
+    SetFileAttributesW(setupOut, FILE_ATTRIBUTE_NORMAL);
+    hs = LoadLibraryExW(stub, NULL, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+    WORD nextIconId = 0;
+    if (hs) EnumResourceNamesW(hs, RT_ICON_W, maxIdCb, (LONG_PTR)&nextIconId);
+    nextIconId++;
+    upd = BeginUpdateResourceW(setupOut, FALSE);
+    if (!upd) { fail(L"BeginUpdateResource(setup) failed (err %lu)", GetLastError()); goto done; }
+    if (!UpdateResourceW(upd, RT_RCDATA_W, RES_SETUPCFG, LANG_NEUTRAL_ID, cfg, (DWORD)(wcslen(cfg) * sizeof(wchar_t))) ||
+        !UpdateResourceW(upd, RT_RCDATA_W, RES_SETUPPAY, LANG_NEUTRAL_ID, pay, (DWORD)paySize))
+    { fail(L"UpdateResource(setup payload) failed"); goto done; }
+    if (lic && !UpdateResourceW(upd, RT_RCDATA_W, RES_SETUPLIC, LANG_NEUTRAL_ID, lic, (DWORD)(wcslen(lic) * sizeof(wchar_t))))
+    { fail(L"UpdateResource(license) failed"); goto done; }
+    if (ico.data && !writeIconGroup(upd, hs, MAKEINTRESOURCEW(SETUP_ICON_ID), ico.data, &nextIconId)) goto done;
+    if (!replaceRaw(upd, hs, RT_VERSION_W, MAKEINTRESOURCEW(1), ver.p, (DWORD)ver.len)) { fail(L"UpdateResource(setup version) failed"); goto done; }
+    if (!EndUpdateResourceW(upd, FALSE)) { upd = NULL; fail(L"EndUpdateResource(setup) failed (err %lu)", GetLastError()); goto done; }
+    upd = NULL;
+    SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, setupOut, NULL);
+    info(L"setup wizard: %s (%s %s, %s install, payload %zu bytes)", setupOut, appName, version,
+         o->perMachine ? L"all-users" : L"per-user", paySize);
+    ok = 1;
+
+done:
+    if (upd) EndUpdateResourceW(upd, TRUE);
+    if (hs) FreeLibrary(hs);
+    if (!ok && outCreated) DeleteFileW(setupOut);
+    free(ver.p); free(ico.data); free(lic);
+    if (pay) mz_free(pay);
+    return ok;
 }
 
-static HWND mk(const wchar_t *cls, const wchar_t *txt, DWORD style, int x, int y, int w, int h, int id)
+/* ---------------------------------------------------------------- compile -- */
+int compileScript(const Opts *src, wchar_t *finalOut, size_t cch)
 {
-    HWND c = CreateWindowExW(!wcscmp(cls, L"EDIT") ? WS_EX_CLIENTEDGE : 0, cls, txt,
-                             WS_CHILD | WS_VISIBLE | style, S(x), S(y), S(w), S(h),
-                             g_wnd, (HMENU)(INT_PTR)id, GetModuleHandleW(NULL), NULL);
-    SendMessageW(c, WM_SETFONT, (WPARAM)g_font, TRUE);
-    return c;
-}
-#define LBL(t, x, y, w)     mk(L"STATIC", t, SS_LEFT, x, (y) + 4, w, 20, -1)
-#define EDT(id, x, y, w)    mk(L"EDIT", L"", WS_TABSTOP | ES_AUTOHSCROLL, x, y, w, 24, id)
-#define BTN(t, id, x, y, w) mk(L"BUTTON", t, WS_TABSTOP | BS_PUSHBUTTON, x, (y) - 1, w, 26, id)
+    static Opts o; o = *src;
+    static FIItem fi[MAX_FI];
+    int nfi = 0, ok = 0;
+    wchar_t *merged = NULL;
+    g_err[0] = 0;
 
-static void buildControls(void)
-{
-    LBL(L"스크립트 (.ahk)", 12, 14, 112);   EDT(ID_SRC, 128, 14, 360);  BTN(L"찾기...", ID_SRC_BR, 494, 14, 82);
-    LBL(L"출력 파일 (.exe)", 12, 46, 112);  EDT(ID_OUT, 128, 46, 360);  BTN(L"찾기...", ID_OUT_BR, 494, 46, 82);
-    LBL(L"아이콘 (.ico)", 12, 78, 112);     EDT(ID_ICO, 128, 78, 272);  BTN(L"찾기...", ID_ICO_BR, 406, 78, 82);
-    BTN(L"기본 아이콘", ID_ICO_DEF, 494, 78, 82);
-    mk(L"STATIC", L"", SS_ICON | SS_CENTERIMAGE | SS_SUNKEN, 584, 64, 44, 44, ID_PREVIEW);
-    LBL(L"베이스 (.bin)", 12, 110, 112);    EDT(ID_BIN, 128, 110, 360); BTN(L"찾기...", ID_BIN_BR, 494, 110, 82);
+    if (!o.in[0]) return fail(L"no script specified (/in)");
+    wchar_t inFull[MAX_PATH]; GetFullPathNameW(o.in, MAX_PATH, inFull, NULL);
+    wcscpy_s(o.in, MAX_PATH, inFull);
+    if (!fileExists(inFull)) return fail(L"script not found: %s", inFull);
 
-    mk(L"BUTTON", L"버전 정보 (선택 · 비우면 기본값 · 스크립트의 ;@Ahk2Exe 지시어가 우선)",
-       BS_GROUPBOX, 12, 148, 616, 128, -1);
-    LBL(L"파일 설명", 26, 172, 78);   EDT(ID_DESC, 106, 172, 218);
-    LBL(L"버전", 338, 172, 60);       EDT(ID_VER, 400, 172, 214);
-    LBL(L"제품명", 26, 204, 78);      EDT(ID_PROD, 106, 204, 218);
-    LBL(L"회사", 338, 204, 60);       EDT(ID_COMP, 400, 204, 214);
-    LBL(L"저작권", 26, 236, 78);      EDT(ID_COPY, 106, 236, 508);
+    /* 1) #Include / Lib merge, FileInstall collection, syntax check */
+    merged = preprocessScript(inFull, fi, &nfi);
+    if (!merged) return 0;
 
-    mk(L"STATIC", L"스크립트나 아이콘 파일을 창에 끌어다 놓을 수 있습니다.", SS_LEFT | SS_ENDELLIPSIS,
-       12, 296, 400, 20, ID_STATUS);
-    mk(L"BUTTON", L"컴파일", WS_TABSTOP | BS_DEFPUSHBUTTON, 438, 290, 92, 30, ID_CONVERT);
-    mk(L"BUTTON", L"닫기", WS_TABSTOP | BS_PUSHBUTTON, 536, 290, 92, 30, ID_CLOSE);
+    /* 2) directives from the whole merged script (override GUI/CLI) */
+    wchar_t assetsDir[MAX_PATH] = L"";
+    parseDirectives(merged, inFull, &o, assetsDir, MAX_PATH);
+    if (!o.out[0]) deriveOut(inFull, o.out, MAX_PATH);
+    else { wchar_t t[MAX_PATH]; GetFullPathNameW(o.out, MAX_PATH, t, NULL); wcscpy_s(o.out, MAX_PATH, t); }
+    if (!o.bin[0]) defaultBin(o.bin, MAX_PATH);
+    if (!o.extractTo[0]) wcscpy_s(o.extractTo, MAX_PATH, L"temp");
+    if (!o.extractMode[0]) wcscpy_s(o.extractMode, 16, L"newer");
 
-    wchar_t v[MAX_PATH];
-    regGet(L"LastIcon", v, MAX_PATH); if (v[0] && fileExists(v)) SetDlgItemTextW(g_wnd, ID_ICO, v);
-    regGet(L"LastBin", v, MAX_PATH);
-    if (v[0] && fileExists(v)) SetDlgItemTextW(g_wnd, ID_BIN, v);
-    else { defaultBin(v, MAX_PATH); SetDlgItemTextW(g_wnd, ID_BIN, v); }
-    if (g_initSrc[0]) setSource(g_initSrc);
-    updatePreview();
-}
+    /* 3) the exe (bundled files embedded only in single-exe mode) */
+    if (!buildExe(&o, merged, fi, nfi, assetsDir, o.outputMode == OUT_EXE)) goto done;
+    runPostExec(&o, o.out, inFull);
+    if (o.sign && !signFile(&o, o.out)) goto done;
+    wcscpy_s(g_lastExe, MAX_PATH, o.out);
+    if (finalOut) wcsncpy_s(finalOut, cch, o.out, _TRUNCATE);
 
-static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
-{
-    switch (msg)
+    /* 4) optional setup wizard */
+    if (o.outputMode == OUT_SETUP)
     {
-    case WM_CREATE:
-        g_wnd = h;
-        DragAcceptFiles(h, TRUE);
-        buildControls();
-        SetFocus(GetDlgItem(h, ID_SRC));
-        return 0;
-    case WM_DROPFILES:
-    {
-        HDROP d = (HDROP)wp; UINT n = DragQueryFileW(d, 0xFFFFFFFF, NULL, 0);
-        for (UINT i = 0; i < n; i++)
-        {
-            wchar_t f[MAX_PATH]; DragQueryFileW(d, i, f, MAX_PATH);
-            if (endsWithI(f, L".ico")) SetDlgItemTextW(h, ID_ICO, f);
-            else if (endsWithI(f, L".bin")) SetDlgItemTextW(h, ID_BIN, f);
-            else if (endsWithI(f, L".exe")) { SetDlgItemTextW(h, ID_OUT, f); }
-            else setSource(f);
-        }
-        DragFinish(d);
-        return 0;
+        wchar_t setupOut[MAX_PATH];
+        if (o.setupOut[0]) wcscpy_s(setupOut, MAX_PATH, o.setupOut);
+        else deriveSetupOut(&o, o.out, setupOut, MAX_PATH);
+        if (!_wcsicmp(setupOut, o.out)) { fail(L"setup output must differ from the exe"); goto done; }
+        if (!buildSetup(&o, o.out, setupOut)) goto done;
+        if (o.sign && !signFile(&o, setupOut)) goto done;
+        if (finalOut) wcsncpy_s(finalOut, cch, setupOut, _TRUNCATE);
     }
-    case WM_COMMAND:
-    {
-        int id = LOWORD(wp), code = HIWORD(wp);
-        if (code == EN_CHANGE)
-        {
-            if (id == ID_SRC && g_outAuto)
-            {
-                wchar_t s[MAX_PATH], o[MAX_PATH] = L"";
-                getText(ID_SRC, s, MAX_PATH);
-                if (s[0]) deriveOut(s, o, MAX_PATH);
-                g_settingOut = 1; SetDlgItemTextW(h, ID_OUT, o); g_settingOut = 0;
-            }
-            else if (id == ID_OUT && !g_settingOut)
-            {   wchar_t o[MAX_PATH]; getText(ID_OUT, o, MAX_PATH); g_outAuto = !o[0]; }
-            else if (id == ID_ICO || id == ID_BIN) updatePreview();
-            return 0;
-        }
-        switch (id)
-        {
-        case ID_SRC_BR: browse(ID_SRC, 0, L"AutoHotkey 스크립트 (*.ahk;*.ahkw)\0*.ahk;*.ahkw\0모든 파일 (*.*)\0*.*\0", L"ahk"); break;
-        case ID_OUT_BR: if (browse(ID_OUT, 1, L"실행 파일 (*.exe)\0*.exe\0", L"exe")) g_outAuto = 0; break;
-        case ID_ICO_BR: browse(ID_ICO, 0, L"아이콘 (*.ico)\0*.ico\0", L"ico"); break;
-        case ID_ICO_DEF: SetDlgItemTextW(h, ID_ICO, L""); break;
-        case ID_BIN_BR: browse(ID_BIN, 0, L"AutoHotkey Web 베이스 (*.bin)\0*.bin\0모든 파일 (*.*)\0*.*\0", L"bin"); break;
-        case ID_CONVERT: doConvert(); break;
-        case ID_CLOSE: case IDCANCEL: DestroyWindow(h); break;
-        }
-        return 0;
-    }
-    case WM_DESTROY:
-        if (g_preview) DestroyIcon(g_preview);
-        PostQuitMessage(0);
-        return 0;
-    }
-    return DefWindowProcW(h, msg, wp, lp);
-}
-
-static int runGui(void)
-{
-    SetProcessDPIAware();
-    HDC dc = GetDC(NULL); g_scale = GetDeviceCaps(dc, LOGPIXELSY) / 96.0; ReleaseDC(NULL, dc);
-    g_font = CreateFontW(-S(12), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Malgun Gothic");
-
-    HINSTANCE hi = GetModuleHandleW(NULL);
-    WNDCLASSEXW wc; memset(&wc, 0, sizeof(wc));
-    wc.cbSize = sizeof(wc); wc.lpfnWndProc = wndProc; wc.hInstance = hi;
-    wc.hIcon = LoadIconW(hi, MAKEINTRESOURCEW(1)); if (!wc.hIcon) wc.hIcon = LoadIconW(NULL, IDI_APPLICATION);
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-    wc.lpszClassName = L"AhkWeb2ExeWnd";
-    RegisterClassExW(&wc);
-
-    DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    RECT rc = { 0, 0, S(640), S(332) };
-    AdjustWindowRectEx(&rc, style, FALSE, WS_EX_CONTROLPARENT);
-    HWND w = CreateWindowExW(WS_EX_CONTROLPARENT, wc.lpszClassName, L"AhkWeb2Exe - AutoHotkey Web 스크립트 컴파일러",
-                             style, CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top,
-                             NULL, NULL, hi, NULL);
-    if (!w) return 1;
-    ShowWindow(w, SW_SHOW);
-    MSG m;
-    while (GetMessageW(&m, NULL, 0, 0) > 0)
-    {
-        if (m.message == WM_KEYDOWN && m.wParam == VK_ESCAPE) { DestroyWindow(w); continue; }
-        if (!IsDialogMessageW(w, &m)) { TranslateMessage(&m); DispatchMessageW(&m); }
-    }
-    DeleteObject(g_font);
-    return 0;
+    ok = 1;
+done:
+    free(merged);
+    return ok;
 }
 
 /* ------------------------------------------------------------------- main -- */
@@ -1114,7 +1632,7 @@ static void initStdio(void)
 int wmain(int argc, wchar_t **argv)
 {
     setlocale(LC_CTYPE, "");
-    static Opts o; memset(&o, 0, sizeof(o));
+    static Opts o; optsDefaults(&o);
     int gui = 0, haveIn = 0;
     for (int i = 1; i < argc; i++)
     {
@@ -1124,6 +1642,7 @@ int wmain(int argc, wchar_t **argv)
         else if (!_wcsicmp(a, L"/out")  && more)   wcsncpy_s(o.out,  MAX_PATH, argv[++i], _TRUNCATE);
         else if ((!_wcsicmp(a, L"/bin") || !_wcsicmp(a, L"/base")) && more) wcsncpy_s(o.bin, MAX_PATH, argv[++i], _TRUNCATE);
         else if (!_wcsicmp(a, L"/icon") && more)   wcsncpy_s(o.icon, MAX_PATH, argv[++i], _TRUNCATE);
+        else if (!_wcsicmp(a, L"/setup")) o.outputMode = OUT_SETUP;
         else if (!_wcsicmp(a, L"/silent")) o.silent = 1;
         else if (!_wcsicmp(a, L"/gui"))    gui = 1;
         else if ((!_wcsicmp(a, L"/compress") || !_wcsicmp(a, L"/mpress") || !_wcsicmp(a, L"/cp") ||
@@ -1133,18 +1652,20 @@ int wmain(int argc, wchar_t **argv)
 
     if (!haveIn || gui)
     {
-        if (o.in[0]) GetFullPathNameW(o.in, MAX_PATH, g_initSrc, NULL);
-        return runGui();
+        wchar_t init[MAX_PATH] = L"";
+        if (o.in[0]) GetFullPathNameW(o.in, MAX_PATH, init, NULL);
+        return runGui(init);
     }
 
     initStdio();
-    int ok = compileScript(&o, NULL, 0);
+    wchar_t out[MAX_PATH];
+    int ok = compileScript(&o, out, MAX_PATH);
     if (!ok)
     {
         if (g_haveOut) { fwprintf(stderr, L"AhkWeb2Exe: %s\n", g_err); fflush(stderr); }
         else if (!o.silent)
         {
-            wchar_t m[1200]; _snwprintf_s(m, 1200, _TRUNCATE, L"컴파일 실패:\n%s", g_err);
+            wchar_t m[2200]; _snwprintf_s(m, 2200, _TRUNCATE, L"컴파일 실패:\n%s", g_err);
             MessageBoxW(NULL, m, L"AhkWeb2Exe", MB_ICONERROR);
         }
         return 2;

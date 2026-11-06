@@ -19,6 +19,7 @@ GNU General Public License for more details.
 #include "application.h" // for MsgSleep()
 #include "window.h" // For MsgBox() & SetForegroundLockTimeout()
 #include "TextIO.h"
+void WebFilesExtractAtStartup(); // script_webassets.cpp (AutoHotkey Web)
 
 // General note:
 // The use of Sleep() should be avoided *anywhere* in the code.  Instead, call MsgSleep().
@@ -86,6 +87,10 @@ int WINAPI _tWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmd
 
 	if (!InitForExecution())
 		return CRITICAL_ERROR;
+
+	// AutoHotkey Web: extract ;@AhkWeb-Include files before the auto-execute section runs
+	// (no-op when nothing is embedded; also sweeps stale per-process temp folders).
+	WebFilesExtractAtStartup();
 
 	return MainExecuteScript();
 }

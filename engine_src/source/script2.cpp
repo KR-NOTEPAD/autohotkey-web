@@ -11685,6 +11685,19 @@ VarSizeType BIV_AhkWebAssets(LPTSTR aBuf, LPTSTR aVarName)
 	return (VarSizeType)_tcslen(dir);
 }
 
+// A_AhkWebFiles: folder where AhkWeb2Exe's ;@AhkWeb-Include files were extracted
+// (temp / exe folder / AppData, per ;@AhkWeb-ExtractTo). Uncompiled or nothing
+// embedded: A_ScriptDir, so  A_AhkWebFiles "\data\x.txt"  works in both cases.
+VarSizeType BIV_AhkWebFiles(LPTSTR aBuf, LPTSTR aVarName)
+{
+	const wchar_t *dir = WebFilesGetDir();
+	if (!*dir)
+		dir = g_script.mFileDir;
+	if (aBuf)
+		_tcscpy(aBuf, dir);
+	return (VarSizeType)_tcslen(dir);
+}
+
 VarSizeType BIV_AhkPath(LPTSTR aBuf, LPTSTR aVarName) // v1.0.41.
 {
 #ifdef AUTOHOTKEYSC

@@ -95,6 +95,8 @@ Source: "..\{#AppExe}";                      DestDir: "{app}";          Flags: i
 Source: "..\onnxruntime.dll";                DestDir: "{app}";          Flags: ignoreversion
 Source: "..\compiler\AhkWeb2Exe.exe";        DestDir: "{app}\compiler"; Flags: ignoreversion
 Source: "..\compiler\AutoHotkeyWeb.bin";     DestDir: "{app}\compiler"; Flags: ignoreversion
+; Setup-wizard stub used by AhkWeb2Exe's "EXE + Setup.exe" output.
+Source: "..\compiler\AhkWebSetup.bin";       DestDir: "{app}\compiler"; Flags: ignoreversion
 Source: "..\scite\ahkweb.api";               DestDir: "{app}\scite";    Flags: ignoreversion
 Source: "..\docs\*";                         DestDir: "{app}\docs";     Flags: ignoreversion recursesubdirs createallsubdirs
 ; Bundled libraries (native CDP adapter + pure-AHK JSON) and runnable examples.

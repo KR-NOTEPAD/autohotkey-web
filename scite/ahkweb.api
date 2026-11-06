@@ -14,6 +14,7 @@ WebGui, Name:Destroy \nClose the window and free its WebView2 resources.
 WebGuiGet, OutputVar, Name:Eval, JsCode \nRun JavaScript and store its result (JSON) in OutputVar, synchronously (pumps messages, 5s timeout). A JSON string is unquoted to a plain string; other JSON is returned as-is.
 WebGuiGet, OutputVar, Name:Hwnd \nStore the web window's handle in OutputVar so stock WinMove/WinSet/etc. can target it.
 A_AhkWebAssets \nAutoHotkey Web: path to this EXE's extracted embedded web assets (from AhkWeb2Exe ;@AhkWeb-Assets). Empty when run uncompiled.
+A_AhkWebFiles \nAutoHotkey Web: folder where AhkWeb2Exe ;@AhkWeb-Include files were extracted (temp/exe/AppData per ;@AhkWeb-ExtractTo). A_ScriptDir when run uncompiled or nothing is bundled.
 A_AhkWebVersion \nAutoHotkey Web: the engine version string (same numbering as A_AhkVersion).
 A_AhkWebBuild \nAutoHotkey Web: this fork's build version (date-based, e.g. 2026.11.1). Separate from A_AhkWebVersion (engine version).
 A_IsAhkWeb \nAutoHotkey Web: "1" on the AutoHotkey Web engine; empty on stock AutoHotkey.

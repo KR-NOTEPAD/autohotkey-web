@@ -1,0 +1,4 @@
+HelperValue()
+{
+    return "helper-ok"
+}

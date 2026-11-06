@@ -19,9 +19,18 @@ set "RES="
 rc /nologo /fo ahkweb2exe.res ahkweb2exe.rc >nul 2>nul && set "RES=ahkweb2exe.res"
 REM GUI subsystem (Ahk2Exe-style window when run without /in); CLI output attaches to the
 REM parent console or uses redirected stdout (SciTE output pane).
-cl /nologo /O2 /W3 /utf-8 ahkweb2exe.c miniz.c %RES% /Fe:AhkWeb2Exe.exe /link /SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup /MANIFEST:EMBED
+cl /nologo /O2 /W3 /utf-8 ahkweb2exe.c a2e_gui.c miniz.c %RES% /Fe:AhkWeb2Exe.exe /link /SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup /MANIFEST:EMBED
 if errorlevel 1 ( echo [FAILED] & exit /b 1 )
-del ahkweb2exe.obj miniz.obj ahkweb2exe.res 2>nul
+del ahkweb2exe.obj a2e_gui.obj miniz.obj ahkweb2exe.res 2>nul
+
+REM Setup wizard stub: AhkWeb2Exe copies it and adds the payload for "EXE + Setup.exe" output.
+echo [BUILD] AhkWebSetup.bin ...
+rc /nologo /fo setup_stub.res setup_stub.rc
+if errorlevel 1 ( echo [FAILED] setup_stub.rc & exit /b 1 )
+cl /nologo /O1 /W3 /utf-8 setup_stub.c miniz.c setup_stub.res /Fe:AhkWebSetup.exe /link /SUBSYSTEM:WINDOWS /MANIFEST:EMBED
+if errorlevel 1 ( echo [FAILED] & exit /b 1 )
+move /y AhkWebSetup.exe AhkWebSetup.bin >nul
+del setup_stub.obj miniz.obj setup_stub.res 2>nul
 
 REM Refresh the base .bin from the engine's Self-contained build output.
 set "BIN=..\engine_src\bin\Unicode 64-bit.bin"

@@ -32,6 +32,9 @@ void WebGuiShutdownAll();
 // empty string if there are none (uncompiled run, or compiled without assets).
 // Implemented in script_webassets.cpp. Backs the A_AhkWebAssets built-in var.
 const wchar_t *WebAssetsGetDir();
+// Bundled files (;@AhkWeb-Include): extraction folder or "" (script_webassets.cpp).
+const wchar_t *WebFilesGetDir();
+void WebFilesExtractAtStartup();
 
 // Drains one queued web event (called by the main message loop when it receives
 // AHK_WEB_EVENT). Returns true if an event was dispatched.

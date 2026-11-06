@@ -7,6 +7,41 @@
 
 [Keep a Changelog]: https://keepachangelog.com/ko/
 
+## [2026.11.2] - 2026-11-06
+엔진: AutoHotkey 1.1.37.02 기반 · 주제: **컴파일러(AhkWeb2Exe) 대개편**
+
+### Added (추가)
+- **컴파일러 창** — 인자 없이 실행하면 Ahk2Exe 같은 창. 탭: 기본 · 버전 정보 · 파일 포함 · 설치 마법사 · 고급.
+  최근 스크립트, 스크립트별 설정 저장, 아이콘 미리보기, 드래그&드롭, 컴파일 후 실행/폴더 열기, 백그라운드 컴파일.
+  '파일 포함' 목록에 스크립트의 `;@AhkWeb-Include` 항목도 `[스크립트]`로 표시.
+- **아이콘·버전 정보** — `/icon`·`;@Ahk2Exe-SetMainIcon`이 실제 `RT_GROUP_ICON`/`RT_ICON`을 교체(탐색기·작업표시줄·트레이).
+  트레이 상태 아이콘(Suspend 206 / Pause 207 / 둘 다 208). `SetVersion`·`SetDescription`·`SetCopyright`·`SetCompanyName`·
+  `SetProductName`·`Set <속성>, <값>` 등으로 `VS_VERSIONINFO` 재작성(지정하지 않으면 기존처럼 공백).
+- **파일 포함(단일 EXE)** — `;@AhkWeb-Include <파일|폴더> [, 대상]`으로 확장자 제한 없이 exe에 묶고, 엔진이 auto-execute 전에
+  추출(`;@AhkWeb-ExtractTo temp|exe|appdata|localappdata|경로`, `ExtractMode newer|always|missing`, `KeepFiles`).
+  새 내장 변수 **`A_AhkWebFiles`**(미컴파일 시 `A_ScriptDir`).
+- **설치 마법사 생성** — 출력 방식 "EXE + 설치 마법사" / `;@AhkWeb-Setup` / `/setup` → 네이티브 `<앱>_Setup.exe`
+  (외부 도구 불필요): 환영·사용권 계약·설치 폴더·바로가기·진행·완료, 제거 프로그램, 앱 및 기능 등록, 업그레이드 설치,
+  설치 범위 현재 사용자 / 모든 사용자(UAC) / **설치할 때 선택**(`SetupScope ask`), 무인 설치·제거(`/S`, `/D=`,
+  `/ALLUSERS`, `/CURRENTUSER`, `/NODESKTOP`, `/NOSTARTMENU`), 한국어/영어 UI.
+- **코드 서명** — signtool 자동 탐색, 인증서 주체(`SignSubject`) 또는 .pfx(`Sign 파일, 암호`), 타임스탬프(실패 시 없이 재시도),
+  exe와 Setup.exe 모두 서명. GUI 암호는 DPAPI로 저장.
+- **기타 지시어** — `RequireAdmin`/`UpdateManifest`(관리자 권한 실행), `PostExec`(`%A_WorkFileName%`), `ExeName`,
+  `AddResource`(아이콘 그룹·비트맵·HTML·manifest·RCDATA), `IgnoreBegin/End`, `Keep`, `;@AhkWeb-Base`.
+- **설치 프로그램** — 시작 메뉴 "AhkWeb2Exe 컴파일러" 바로가기(+ 바탕화면 선택), `.ahkw` 우클릭 "컴파일 (옵션 창)",
+  선택 시 `.ahk` 우클릭에도 추가(연결은 건드리지 않음). `AhkWebSetup.bin` 포함.
+
+### Fixed (수정)
+- **컴파일된 exe에서 `#Include`·Lib 함수·`FileInstall`이 동작하지 않던 문제** — Self-contained 베이스는 런타임에
+  #Include를 처리하지 않는데 컴파일러가 메인 스크립트만 넣고 있었음. 이제 Ahk2Exe처럼 컴파일 시 모두 합치고
+  (`AutoHotkeyWeb.exe /iLib`로 Lib 자동 포함 + 문법 검사), FileInstall 원본을 리소스로 포함.
+- `/icon`이 RCDATA에만 들어가 실제 아이콘이 바뀌지 않던 문제.
+- `A_AhkWebAssets` 임시 폴더(`%TEMP%\AhkWeb_<pid>`)가 남던 문제 — 종료 시 삭제, 남은 폴더는 다음 실행 때 정리.
+
+### Tests
+- `tests\compiler\verify_icon_test.ps1`(12) · `verify_bundle_test.ps1`(24) · `verify_wizard_sign_test.ps1`(36:
+  서명·마법사 클릭 설치/제거·모든 사용자 설치·관리자 실행).
+
 ## [2026.11.1] - 2026-11-06
 엔진: AutoHotkey 1.1.37.02 기반
 
@@ -22,33 +57,6 @@
 - **EXE 스크립트 암호화** — `AhkWeb2Exe` 컴파일 시 스크립트를 DEFLATE 압축 + 키스트림 XOR(컨테이너 `AHKW1`).
   리소스 뷰어/strings로 평문 노출 안 됨. 엔진이 메모리에서 복원.
 - **`A_AhkWebBuild`** — 포크 빌드 버전 변수(이 항목의 버전).
-- **AhkWeb2Exe: Ahk2Exe식 아이콘·버전 정보** — `/icon`과 `;@Ahk2Exe-SetMainIcon`이 실제
-  `RT_GROUP_ICON`/`RT_ICON`을 교체(탐색기·작업표시줄·트레이 아이콘 반영). 이전엔 RCDATA에만 넣어 효과가 없었음.
-  `SetVersion`·`SetDescription`·`SetCopyright`·`SetCompanyName`·`SetProductName`·`Set <속성>, <값>` 등으로
-  `VS_VERSIONINFO` 재작성, `AddResource`(아이콘 그룹·비트맵·HTML·RCDATA), `ExeName`, `;@AhkWeb-Base` 지원.
-- **AhkWeb2Exe GUI** — 인자 없이 실행하면 Ahk2Exe 같은 창(스크립트/출력/아이콘 미리보기/베이스/버전 정보,
-  드래그&드롭, 마지막 아이콘 기억). `.ahkw` 출력 이름 처리, 출력 폴더 자동 생성, GUI 서브시스템(콘솔 깜빡임 없음).
-  테스트: `tests\compiler\verify_icon_test.ps1`.
-- **설치 프로그램** — 시작 메뉴 "AhkWeb2Exe 컴파일러" 바로가기(+ 바탕화면 선택), `.ahkw` 우클릭
-  "컴파일 (옵션 창)" 추가, 선택 시 `.ahk` 우클릭에도 "AutoHotkey Web으로 컴파일 (옵션 창)"(연결은 건드리지 않음).
-- **파일 포함(단일 EXE)** — `;@AhkWeb-Include <파일|폴더> [, 대상]`으로 확장자 제한 없이 exe에 묶고,
-  엔진이 auto-execute 전에 추출(`;@AhkWeb-ExtractTo temp|exe|appdata|localappdata|경로`,
-  `ExtractMode newer|always|missing`). 새 내장 변수 **`A_AhkWebFiles`**(미컴파일 시 `A_ScriptDir`).
-  임시 폴더는 종료 시 삭제, 비정상 종료로 남은 `AhkWeb_<pid>` 폴더는 다음 실행 때 정리(기존 assets 폴더 누수도 해결).
-- **설치 마법사 생성** — 출력 방식 "EXE + 설치 마법사" / `;@AhkWeb-Setup` / `/setup`으로 네이티브 Setup.exe 생성
-  (`AhkWebSetup.bin`, 외부 도구 불필요): 환영·사용권 계약·설치 폴더·바로가기·진행·완료 페이지, 제거 프로그램,
-  앱 및 기능 등록, 업그레이드 설치, 현재 사용자/모든 사용자(UAC), 무인 설치/제거(`/S`, `/D=`), 한국어/영어 UI.
-- **컴파일러 GUI 확장** — 탭(기본·버전 정보·파일 포함·설치 마법사·고급), 최근 스크립트, 스크립트별 설정 저장,
-  컴파일 후 실행/폴더 열기, 관리자 권한 실행, 트레이 상태 아이콘(206/207/208), 코드 서명(signtool, 암호 DPAPI 저장),
-  백그라운드 컴파일.
-- **지시어 추가** — `SuspendIcon`·`PauseIcon`·`PauseSuspendIcon`, `UpdateManifest`/`RequireAdmin`, `PostExec`,
-  `Sign`·`SignSubject`·`SignTimestamp`, `Setup*`, `IgnoreBegin/End`, `Keep`.
-  테스트: `tests\compiler\verify_bundle_test.ps1` (24개 항목).
-
-### Fixed (수정)
-- **컴파일된 exe에서 `#Include`·Lib 함수·`FileInstall`이 동작하지 않던 문제** — Self-contained 베이스는 런타임에
-  #Include를 처리하지 않는데 컴파일러가 메인 스크립트만 넣고 있었음. 이제 Ahk2Exe처럼 컴파일 시 모두 합치고
-  (`AutoHotkeyWeb.exe /iLib`로 Lib 자동 포함 + 문법 검사), FileInstall 원본을 리소스로 포함.
 
 ### Changed (변경)
 - **식별자 중립화(안티치트 오탐 완화)** — 컴파일 배포 exe의 창 클래스(`AhkwShell`/`AhkwShellGui`/`AhkwWebView`),

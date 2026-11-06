@@ -26,7 +26,7 @@ enum {
     /* files */
     ID_LIST, ID_ADDFILE, ID_ADDDIR, ID_REMOVE, ID_DEST, ID_DEST_SET, ID_EXTRACT, ID_EXMODE, ID_KEEP,
     /* setup */
-    ID_APPNAME, ID_PUBLISHER, ID_INSTDIR, ID_SCOPE_USER, ID_SCOPE_ALL, ID_LICENSE, ID_LICENSE_BR,
+    ID_APPNAME, ID_PUBLISHER, ID_INSTDIR, ID_SCOPE_USER, ID_SCOPE_ALL, ID_SCOPE_ASK, ID_LICENSE, ID_LICENSE_BR,
     ID_SC_DESK, ID_SC_START, ID_SC_RUN, ID_SETUPOUT, ID_SETUPOUT_BR,
     /* advanced */
     ID_SUSP, ID_SUSP_BR, ID_PAUSE, ID_PAUSE_BR, ID_PSUSP, ID_PSUSP_BR,
@@ -104,17 +104,33 @@ static const int PER_SCRIPT_TEXT[] = {
     ID_SUSP, ID_PAUSE, ID_PSUSP, ID_PFX, ID_SUBJECT, ID_TS
 };
 static const int PER_SCRIPT_CHECK[] = {
-    ID_MODE_SETUP, ID_ADMIN, ID_KEEP, ID_SCOPE_ALL, ID_SC_DESK, ID_SC_START, ID_SC_RUN, ID_SIGN
+    ID_MODE_SETUP, ID_ADMIN, ID_KEEP, ID_SCOPE_ALL, ID_SCOPE_ASK, ID_SC_DESK, ID_SC_START, ID_SC_RUN, ID_SIGN
 };
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
 
 static void listClear(void) { ListView_DeleteAllItems(g_list); }
-static void listAdd(const wchar_t *src, const wchar_t *dest)
+/* fromScript = row comes from a ;@AhkWeb-Include line in the script (read-only here) */
+static void listAddEx(const wchar_t *src, const wchar_t *dest, int fromScript)
 {
     LVITEMW it; memset(&it, 0, sizeof(it));
-    it.mask = LVIF_TEXT; it.iItem = ListView_GetItemCount(g_list); it.pszText = (wchar_t *)src;
+    it.mask = LVIF_TEXT | LVIF_PARAM; it.iItem = ListView_GetItemCount(g_list);
+    it.pszText = (wchar_t *)src; it.lParam = fromScript;
     int i = ListView_InsertItem(g_list, &it);
-    ListView_SetItemText(g_list, i, 1, (wchar_t *)(dest[0] ? dest : L"(이름 그대로)"));
+    wchar_t d[MAX_PATH + 16];
+    _snwprintf_s(d, MAX_PATH + 16, _TRUNCATE, L"%s%s", fromScript ? L"[스크립트] " : L"", dest[0] ? dest : L"(이름 그대로)");
+    ListView_SetItemText(g_list, i, 1, d);
+}
+static void listAdd(const wchar_t *src, const wchar_t *dest) { listAddEx(src, dest, 0); }
+static int listFromScript(int i)
+{
+    LVITEMW it; memset(&it, 0, sizeof(it)); it.mask = LVIF_PARAM; it.iItem = i;
+    return ListView_GetItem(g_list, &it) && it.lParam;
+}
+static void listAddScriptItems(const wchar_t *script)
+{
+    static IncItem items[MAX_INC];
+    int n = scriptDirectiveIncludes(script, items, MAX_INC);
+    for (int i = 0; i < n; i++) listAddEx(items[i].src, items[i].dest, 1);
 }
 static void listGet(int i, wchar_t *src, wchar_t *dest)
 {
@@ -165,6 +181,7 @@ static void saveScriptSettings(const wchar_t *script)
     {
         for (int i = 0; i < cnt; i++)
         {
+            if (listFromScript(i)) continue;
             wchar_t s[MAX_PATH], d[MAX_PATH]; listGet(i, s, d);
             k += _snwprintf_s(ms + k, cap - k, _TRUNCATE, L"%s|%s", s, d) + 1;
         }
@@ -188,7 +205,7 @@ static void setDefaultsForNewScript(void)
     SetDlgItemTextW(g_wnd, ID_ICO, fileExists(ico) ? ico : L"");
     SetDlgItemTextW(g_wnd, ID_TS, L"http://timestamp.digicert.com");
     check(ID_MODE_EXE, 1); check(ID_MODE_SETUP, 0); check(ID_ADMIN, 0); check(ID_KEEP, 0);
-    check(ID_SCOPE_USER, 1); check(ID_SCOPE_ALL, 0); check(ID_SC_DESK, 1); check(ID_SC_START, 1); check(ID_SC_RUN, 1);
+    check(ID_SCOPE_USER, 1); check(ID_SCOPE_ALL, 0); check(ID_SCOPE_ASK, 0); check(ID_SC_DESK, 1); check(ID_SC_START, 1); check(ID_SC_RUN, 1);
     check(ID_SIGN, 0);
     SendDlgItemMessageW(g_wnd, ID_EXTRACT, CB_SETCURSEL, 0, 0);
     SendDlgItemMessageW(g_wnd, ID_EXMODE, CB_SETCURSEL, 1, 0);
@@ -215,7 +232,8 @@ static int loadScriptSettings(const wchar_t *script)
         check(PER_SCRIPT_CHECK[i], v[0] == L'1');
     }
     check(ID_MODE_EXE, !checked(ID_MODE_SETUP));
-    check(ID_SCOPE_USER, !checked(ID_SCOPE_ALL));
+    if (checked(ID_SCOPE_ALL) && checked(ID_SCOPE_ASK)) check(ID_SCOPE_ALL, 0);
+    check(ID_SCOPE_USER, !checked(ID_SCOPE_ALL) && !checked(ID_SCOPE_ASK));
     regGetIn(sub, L"extract", v, 1024); if (v[0]) SendDlgItemMessageW(g_wnd, ID_EXTRACT, CB_SETCURSEL, _wtoi(v), 0);
     regGetIn(sub, L"exmode", v, 1024);  if (v[0]) SendDlgItemMessageW(g_wnd, ID_EXMODE, CB_SETCURSEL, _wtoi(v), 0);
     wchar_t key[300]; _snwprintf_s(key, 300, _TRUNCATE, L"%s\\%s", REG_KEY, sub);
@@ -290,6 +308,7 @@ static void onSourceChanged(const wchar_t *path)
         wcscpy_s(g_loadedFor, MAX_PATH, path);
         if (loadScriptSettings(path)) setStatus(L"이 스크립트의 저장된 설정을 불러왔습니다.");
         else setStatus(L"새 스크립트 - 기본 설정");
+        listAddScriptItems(path);
         updatePreview();
     }
     if (g_outAuto)
@@ -369,8 +388,9 @@ static void buildControls(void)
     LBL(T_SETUP, L"게시자", 28, 84, 110);         EDT(T_SETUP, ID_PUBLISHER, 140, 84, 512);
     LBL(T_SETUP, L"설치 폴더 이름", 28, 118, 110); EDT(T_SETUP, ID_INSTDIR, 140, 118, 512);
     LBL(T_SETUP, L"설치 범위", 28, 152, 110);
-    RAD(T_SETUP, L"현재 사용자 (관리자 권한 불필요)", ID_SCOPE_USER, 140, 154, 250, 1);
-    RAD(T_SETUP, L"모든 사용자 (Program Files, 관리자)", ID_SCOPE_ALL, 400, 154, 252, 0);
+    RAD(T_SETUP, L"현재 사용자 (관리자 불필요)", ID_SCOPE_USER, 140, 154, 180, 1);
+    RAD(T_SETUP, L"모든 사용자 (관리자)", ID_SCOPE_ALL, 326, 154, 150, 0);
+    RAD(T_SETUP, L"설치할 때 선택", ID_SCOPE_ASK, 482, 154, 170, 0);
     LBL(T_SETUP, L"사용권 계약 (.txt)", 28, 188, 110); EDT(T_SETUP, ID_LICENSE, 140, 188, 410); BTN(T_SETUP, L"찾기...", ID_LICENSE_BR, 556, 188, 96);
     LBL(T_SETUP, L"Setup 파일", 28, 222, 110);    EDT(T_SETUP, ID_SETUPOUT, 140, 222, 410); BTN(T_SETUP, L"찾기...", ID_SETUPOUT_BR, 556, 222, 96);
     LBL(T_SETUP, L"기본 선택", 28, 260, 110);
@@ -484,7 +504,10 @@ static void gatherOpts(Opts *o)
 
     int cnt = ListView_GetItemCount(g_list);
     for (int i = 0; i < cnt && o->ninc < MAX_INC; i++)
-    { listGet(i, o->inc[o->ninc].src, o->inc[o->ninc].dest); o->ninc++; }
+    {   /* script rows are added again by the compiler from the directives */
+        if (listFromScript(i)) continue;
+        listGet(i, o->inc[o->ninc].src, o->inc[o->ninc].dest); o->ninc++;
+    }
     static const wchar_t *EXV[] = { L"temp", L"exe", L"appdata", L"localappdata" };
     static const wchar_t *EMV[] = { L"always", L"newer", L"missing" };
     int ex = (int)SendDlgItemMessageW(g_wnd, ID_EXTRACT, CB_GETCURSEL, 0, 0); if (ex < 0 || ex > 3) ex = 0;
@@ -493,7 +516,7 @@ static void gatherOpts(Opts *o)
     o->keepFiles = checked(ID_KEEP);
 
     getText(ID_APPNAME, o->appName, 128); getText(ID_PUBLISHER, o->publisher, 128); getText(ID_INSTDIR, o->installDir, 128);
-    o->perMachine = checked(ID_SCOPE_ALL);
+    o->perMachine = checked(ID_SCOPE_ASK) ? 2 : checked(ID_SCOPE_ALL) ? 1 : 0;
     getText(ID_LICENSE, o->license, MAX_PATH); getText(ID_SETUPOUT, o->setupOut, MAX_PATH);
     o->scDesktop = checked(ID_SC_DESK); o->scStartMenu = checked(ID_SC_START); o->runAfterInstall = checked(ID_SC_RUN);
 
@@ -664,6 +687,7 @@ static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         case ID_REMOVE:
         {
             int sel = ListView_GetNextItem(g_list, -1, LVNI_SELECTED);
+            if (sel >= 0 && listFromScript(sel)) { setStatus(L"[스크립트] 항목은 스크립트의 ;@AhkWeb-Include 줄에서 바꾸세요."); break; }
             if (sel >= 0) ListView_DeleteItem(g_list, sel);
             break;
         }
@@ -671,6 +695,7 @@ static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         {
             int sel = ListView_GetNextItem(g_list, -1, LVNI_SELECTED);
             if (sel < 0) { setStatus(L"목록에서 항목을 먼저 선택하세요."); break; }
+            if (listFromScript(sel)) { setStatus(L"[스크립트] 항목은 스크립트의 ;@AhkWeb-Include 줄에서 바꾸세요."); break; }
             wchar_t d[MAX_PATH]; getText(ID_DEST, d, MAX_PATH);
             if (wcsstr(d, L"..") || wcschr(d, L':')) { MessageBoxW(h, L"대상 경로는 상대 경로여야 합니다 (예: data 또는 data\\config.ini).", L"AhkWeb2Exe", MB_ICONWARNING); break; }
             ListView_SetItemText(g_list, sel, 1, d[0] ? d : L"(이름 그대로)");

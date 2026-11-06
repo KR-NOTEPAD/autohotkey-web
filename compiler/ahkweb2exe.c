@@ -579,7 +579,8 @@ static void applyDirective(Opts *o, int isWeb, const wchar_t *name, const wchar_
     else if (IS(L"SetupName"))      wcsncpy_s(o->appName, 128, v, _TRUNCATE);
     else if (IS(L"SetupPublisher")) wcsncpy_s(o->publisher, 128, v, _TRUNCATE);
     else if (IS(L"SetupDir"))       wcsncpy_s(o->installDir, 128, v, _TRUNCATE);
-    else if (IS(L"SetupScope"))     o->perMachine = !_wcsicmp(v, L"machine") || !_wcsicmp(v, L"allusers") || !_wcsicmp(v, L"all");
+    else if (IS(L"SetupScope"))     o->perMachine = (!_wcsicmp(v, L"ask") || !_wcsicmp(v, L"choose")) ? 2
+                                                   : (!_wcsicmp(v, L"machine") || !_wcsicmp(v, L"allusers") || !_wcsicmp(v, L"all"));
     else if (IS(L"SetupLicense"))   { if (v[0]) resolvePath(scriptDir, v, o->license, MAX_PATH); else o->license[0] = 0; }
     else if (IS(L"SetupShortcuts"))
     {
@@ -1519,7 +1520,7 @@ static int buildSetup(Opts *o, const wchar_t *exePath, const wchar_t *setupOut)
     appendCfg(cfg, 4096, L"exe", exeName);
     appendCfg(cfg, 4096, L"dir", dirName);
     appendCfg(cfg, 4096, L"appid", appId);
-    appendCfg(cfg, 4096, L"scope", o->perMachine ? L"machine" : L"user");
+    appendCfg(cfg, 4096, L"scope", o->perMachine == 2 ? L"ask" : o->perMachine ? L"machine" : L"user");
     appendCfg(cfg, 4096, L"desktop", o->scDesktop ? L"1" : L"0");
     appendCfg(cfg, 4096, L"startmenu", o->scStartMenu ? L"1" : L"0");
     appendCfg(cfg, 4096, L"run", o->runAfterInstall ? L"1" : L"0");
@@ -1548,7 +1549,7 @@ static int buildSetup(Opts *o, const wchar_t *exePath, const wchar_t *setupOut)
     upd = NULL;
     SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, setupOut, NULL);
     info(L"setup wizard: %s (%s %s, %s install, payload %zu bytes)", setupOut, appName, version,
-         o->perMachine ? L"all-users" : L"per-user", paySize);
+         o->perMachine == 2 ? L"user-chosen" : o->perMachine ? L"all-users" : L"per-user", paySize);
     ok = 1;
 
 done:
@@ -1558,6 +1559,25 @@ done:
     free(ver.p); free(ico.data); free(lic);
     if (pay) mz_free(pay);
     return ok;
+}
+
+/* Include items declared by ;@AhkWeb-Include directives in the script file itself
+ * (shown read-only in the GUI). Returns the count. */
+int scriptDirectiveIncludes(const wchar_t *script, IncItem *out, int max)
+{
+    wchar_t *text = readTextFileW(script);
+    if (!text) return 0;
+    static Opts tmp; optsDefaults(&tmp);
+    wchar_t assets[MAX_PATH] = L"", full[MAX_PATH];
+    GetFullPathNameW(script, MAX_PATH, full, NULL);
+    size_t logLen = wcslen(g_log);
+    int saveOut = g_haveOut; g_haveOut = 0;
+    parseDirectives(text, full, &tmp, assets, MAX_PATH);
+    g_haveOut = saveOut; g_log[logLen] = 0;      /* notes from this scan are not compile output */
+    free(text);
+    int n = tmp.ninc < max ? tmp.ninc : max;
+    for (int i = 0; i < n; i++) out[i] = tmp.inc[i];
+    return n;
 }
 
 /* ---------------------------------------------------------------- compile -- */

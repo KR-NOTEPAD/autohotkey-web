@@ -11,6 +11,6 @@
 #ifndef ahkweb_version_h
 #define ahkweb_version_h
 
-#define AHKWEB_BUILD "2026.11.1"
+#define AHKWEB_BUILD "2026.11.2"
 
 #endif // ahkweb_version_h

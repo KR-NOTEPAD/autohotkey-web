@@ -13,7 +13,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv2-blue.svg" alt="License: GPLv2"></a>
   <img src="https://img.shields.io/badge/platform-Windows%20x64-0078D6" alt="Windows x64">
   <img src="https://img.shields.io/badge/base-AutoHotkey%20v1.1.37.02-2b3a4a" alt="AutoHotkey v1.1.37.02">
-  <img src="https://img.shields.io/badge/build-2026.11.1-2ea043" alt="build">
+  <img src="https://img.shields.io/badge/build-2026.11.2-2ea043" alt="build">
   <img src="https://img.shields.io/badge/AI-ONNX%20Runtime-5C2D91" alt="ONNX Runtime">
   <a href="https://github.com/KR-NOTEPAD/autohotkey-web"><img src="https://img.shields.io/github/stars/KR-NOTEPAD/autohotkey-web?style=social" alt="Stars"></a>
 </p>
@@ -33,7 +33,7 @@
 **문법은 v1과 100% 동일**하고, 기존 `.ahk` 스크립트가 그대로 돌아갑니다. 거기에 웹 하이브리드 UI,
 한국어 AI(OCR·텍스트 분류), 브라우저 자동화, 암호화 툴킷, 메소드 체이닝을 **외부 DLL·`#Include` 없이 엔진에 직접 내장**했습니다.
 
-> **빌드** `A_AhkWebBuild` = 2026.11.1 · 엔진 1.1.37.02 · [CHANGELOG](CHANGELOG.md)  
+> **빌드** `A_AhkWebBuild` = 2026.11.2 · 엔진 1.1.37.02 · [CHANGELOG](CHANGELOG.md)  
 > **범위** 합법적인 자동화·개발 용도 기능만 포함합니다. 민감(포렌식/복구) 기능은 포함하지 않습니다 → [SECURITY.md](SECURITY.md)
 
 <br>
@@ -42,7 +42,7 @@
 
 ```bat
 REM 1) 설치: 설치 프로그램 실행 (엔진·컴파일러·문서·.ahkw 연결·SciTE4 자동 구성)
-installer\output\AutoHotkeyWeb_Setup_1.1.37.02.exe
+installer\output\AutoHotkeyWeb_Setup_1.1.37.02_2026.11.2.exe
 
 REM 2) 실행
 AutoHotkeyWeb.exe myapp.ahk
@@ -205,7 +205,7 @@ cd compiler && build_compiler.bat
 
 ## 📦 배포물
 
-- 설치 프로그램 `AutoHotkeyWeb_Setup_1.1.37.02.exe` (모델 선택 구성요소) — [Releases](https://github.com/KR-NOTEPAD/autohotkey-web/releases)에서 배포
+- 설치 프로그램 `AutoHotkeyWeb_Setup_1.1.37.02_2026.11.2.exe` (모델 선택 구성요소) — [Releases](https://github.com/KR-NOTEPAD/autohotkey-web/releases)에서 배포
 - 모델(OCR·분류·백본, ≈230MB)은 용량상 리포에 넣지 않고 Releases로 제공 → [MODELS.md](MODELS.md)
 
 <br>

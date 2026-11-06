@@ -51,14 +51,14 @@ FileRead, cfg, %A_AhkWebFiles%\data\config.ini</pre>
 <ul>
 <li>마법사: 환영 → 사용권 계약(지정 시) → 설치 폴더·바로가기 → 설치 → 완료(바로 실행)</li>
 <li>제거 프로그램 생성, <strong>앱 및 기능</strong>(프로그램 추가/제거) 등록, 같은 앱은 기존 폴더에 업그레이드</li>
-<li>설치 범위: 현재 사용자(<code>%LocalAppData%\Programs</code>, 관리자 불필요) 또는 모든 사용자(Program Files, UAC)</li>
-<li>무인 설치: <code>Setup.exe /S /D=C:\경로</code>, 무인 제거: <code>uninstall.exe /S</code></li>
+<li>설치 범위: 현재 사용자(<code>%LocalAppData%\Programs</code>, 관리자 불필요), 모든 사용자(Program Files, UAC), 또는 <strong>설치할 때 선택</strong>(<code>SetupScope ask</code> — 마법사 폴더 페이지에 선택지가 나오고, 모든 사용자를 고르면 그때 관리자 권한을 요청)</li>
+<li>무인 설치: <code>Setup.exe /S /D=C:\경로</code> (<code>/ALLUSERS</code> · <code>/CURRENTUSER</code> · <code>/NODESKTOP</code> · <code>/NOSTARTMENU</code>), 무인 제거: <code>uninstall.exe /S</code></li>
 <li>Setup.exe 아이콘·버전 정보는 앱 아이콘·버전 정보를 따릅니다.</li>
 </ul>
 <pre>;@AhkWeb-Setup
 ;@AhkWeb-SetupName 내 프로그램
 ;@AhkWeb-SetupPublisher 내 회사
-;@AhkWeb-SetupScope user              ; user | machine
+;@AhkWeb-SetupScope user              ; user | machine | ask
 ;@AhkWeb-SetupLicense LICENSE.txt
 ;@AhkWeb-SetupShortcuts desktop,startmenu   ; none 이면 만들지 않음
 ;@AhkWeb-SetupRun 1

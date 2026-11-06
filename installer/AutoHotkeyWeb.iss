@@ -12,6 +12,8 @@
 
 #define AppName "AutoHotkey Web"
 #define AppVersion "1.1.37.02"
+; Fork build (engine_src\source\ahkweb_version.h AHKWEB_BUILD) - keep in sync.
+#define AppBuild "2026.11.2"
 #define AppPublisher "AutoHotkey Web"
 #define AppExe "AutoHotkeyWeb.exe"
 ; All source paths below are RELATIVE to this .iss file's folder (installer\),
@@ -21,13 +23,15 @@
 AppId={{9E2B7C14-AHKW-4E21-9F3A-AUTOHOTKEYWEB}}
 AppName={#AppName}
 AppVersion={#AppVersion}
+AppVerName={#AppName} {#AppVersion} (build {#AppBuild})
+VersionInfoProductTextVersion={#AppVersion} (build {#AppBuild})
 AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\AutoHotkey Web
 DefaultGroupName=AutoHotkey Web
 DisableProgramGroupPage=yes
 LicenseFile=LICENSE.txt
 OutputDir=output
-OutputBaseFilename=AutoHotkeyWeb_Setup_{#AppVersion}
+OutputBaseFilename=AutoHotkeyWeb_Setup_{#AppVersion}_{#AppBuild}
 UninstallDisplayIcon={app}\{#AppExe}
 Compression=lzma2
 SolidCompression=yes

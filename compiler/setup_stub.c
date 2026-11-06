@@ -49,7 +49,7 @@ static int g_ko;   /* Korean UI */
 /* ------------------------------------------------------------------ config -- */
 typedef struct {
     wchar_t name[128], version[64], publisher[128], exe[MAX_PATH], dir[128], appid[160];
-    int machine, desktop, startmenu, run;
+    int machine, ask, desktop, startmenu, run;   /* ask: user picks current-user / all-users in the wizard */
     unsigned long sizekb;
 } Cfg;
 static Cfg      g_cfg;
@@ -76,7 +76,7 @@ static void cfgSet(const wchar_t *k, const wchar_t *v)
     else if (!wcscmp(k, L"exe")) wcsncpy_s(g_cfg.exe, MAX_PATH, v, _TRUNCATE);
     else if (!wcscmp(k, L"dir")) wcsncpy_s(g_cfg.dir, 128, v, _TRUNCATE);
     else if (!wcscmp(k, L"appid")) wcsncpy_s(g_cfg.appid, 160, v, _TRUNCATE);
-    else if (!wcscmp(k, L"scope")) g_cfg.machine = !wcscmp(v, L"machine");
+    else if (!wcscmp(k, L"scope")) { g_cfg.machine = !wcscmp(v, L"machine"); g_cfg.ask = !wcscmp(v, L"ask"); }
     else if (!wcscmp(k, L"desktop")) g_cfg.desktop = _wtoi(v);
     else if (!wcscmp(k, L"startmenu")) g_cfg.startmenu = _wtoi(v);
     else if (!wcscmp(k, L"run")) g_cfg.run = _wtoi(v);
@@ -117,6 +117,23 @@ static int loadCfg(void)
     return g_cfg.exe[0] && g_cfg.appid[0];
 }
 
+/* The config as actually installed (scope fixed) - written into uninstall.exe. */
+static void cfgSerialize(wchar_t *out, size_t cch)
+{
+    _snwprintf_s(out, cch, _TRUNCATE,
+        L"name=%s\nversion=%s\npublisher=%s\nexe=%s\ndir=%s\nappid=%s\nscope=%s\ndesktop=%d\nstartmenu=%d\nrun=%d\nsizekb=%lu\n",
+        g_cfg.name, g_cfg.version, g_cfg.publisher, g_cfg.exe, g_cfg.dir, g_cfg.appid,
+        g_cfg.machine ? L"machine" : L"user", g_cfg.desktop, g_cfg.startmenu, g_cfg.run, g_cfg.sizekb);
+}
+
+static int uninstallKeyExists(HKEY root)
+{
+    wchar_t key[300]; HKEY k;
+    _snwprintf_s(key, 300, _TRUNCATE, L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\%s", g_cfg.appid);
+    if (RegOpenKeyExW(root, key, 0, KEY_READ, &k) != ERROR_SUCCESS) return 0;
+    RegCloseKey(k); return 1;
+}
+
 /* ----------------------------------------------------------------- helpers -- */
 static int isAdmin(void)
 {
@@ -135,8 +152,15 @@ static int relaunchElevated(const wchar_t *extraArgs)
     else { while (*cl && *cl != L' ') cl++; }
     wchar_t args[2048]; _snwprintf_s(args, 2048, _TRUNCATE, L"%s %s", cl, extraArgs ? extraArgs : L"");
     SHELLEXECUTEINFOW se; memset(&se, 0, sizeof(se));
-    se.cbSize = sizeof(se); se.lpVerb = L"runas"; se.lpFile = self; se.lpParameters = args; se.nShow = SW_SHOWNORMAL;
-    return ShellExecuteExW(&se);
+    se.cbSize = sizeof(se); se.fMask = SEE_MASK_NOCLOSEPROCESS; se.lpVerb = L"runas";
+    se.lpFile = self; se.lpParameters = args; se.nShow = SW_SHOWNORMAL;
+    if (!ShellExecuteExW(&se)) return 0;
+    if (se.hProcess)
+    {   /* silent callers (scripts, deployment tools) expect us to return when it is done */
+        if (g_silent) WaitForSingleObject(se.hProcess, INFINITE);
+        CloseHandle(se.hProcess);
+    }
+    return 1;
 }
 
 static void folderPath(int csidlUser, int csidlCommon, wchar_t *out)
@@ -286,8 +310,11 @@ static int doInstall(void)
             HANDLE u = BeginUpdateResourceW(unin, FALSE);
             if (u)
             {
-                UpdateResourceW(u, RT_RCDATA_W, L">SETUP PAYLOAD<", MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), NULL, 0);
-                UpdateResourceW(u, RT_RCDATA_W, L">SETUP LICENSE<", MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), NULL, 0);
+                WORD ln = MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL);
+                UpdateResourceW(u, RT_RCDATA_W, L">SETUP PAYLOAD<", ln, NULL, 0);
+                UpdateResourceW(u, RT_RCDATA_W, L">SETUP LICENSE<", ln, NULL, 0);
+                wchar_t cfg[2048]; cfgSerialize(cfg, 2048);   /* scope as installed, not "ask" */
+                UpdateResourceW(u, RT_RCDATA_W, L">SETUP CFG<", ln, cfg, (DWORD)(wcslen(cfg) * sizeof(wchar_t)));
                 EndUpdateResourceW(u, FALSE);
             }
         }
@@ -384,8 +411,9 @@ enum { P_WELCOME, P_LICENSE, P_FOLDER, P_PROGRESS, P_FINISH, P_COUNT };
 enum {
     ID_BACK = 100, ID_NEXT, ID_CANCEL, ID_TITLE, ID_SUB, ID_ICON, ID_TEXT,
     ID_LIC, ID_AGREE, ID_DISAGREE, ID_DIRLBL, ID_DIR, ID_BROWSE, ID_SPACE, ID_DESK, ID_START,
-    ID_STATUS, ID_BAR, ID_RUN
+    ID_STATUS, ID_BAR, ID_RUN, ID_SCOPE_U, ID_SCOPE_M
 };
+static int g_autoInstall;   /* elevated relaunch: go straight to installing */
 static int    g_page = P_WELCOME;
 static double g_scale = 1.0;
 static HFONT  g_font, g_bold, g_big;
@@ -523,6 +551,14 @@ static void buildUi(void)
     mk(P_FOLDER, L"BUTTON", TR("시작 메뉴에 바로가기 만들기", "Create a Start menu shortcut"), BS_AUTOCHECKBOX | WS_TABSTOP, 0, 22, 224, 460, 24, ID_START, NULL);
     CheckDlgButton(g_wnd, ID_DESK, g_cfg.desktop ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(g_wnd, ID_START, g_cfg.startmenu ? BST_CHECKED : BST_UNCHECKED);
+    if (g_cfg.ask)
+    {
+        mk(P_FOLDER, L"BUTTON", TR("나만 사용 (현재 사용자, 관리자 권한 불필요)", "Install for me only (no administrator rights)"),
+           BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP, 0, 22, 256, 470, 22, ID_SCOPE_U, NULL);
+        mk(P_FOLDER, L"BUTTON", TR("이 PC의 모든 사용자 (관리자 권한 필요)", "Install for all users (administrator rights required)"),
+           BS_AUTORADIOBUTTON, 0, 22, 280, 470, 22, ID_SCOPE_M, NULL);
+        CheckDlgButton(g_wnd, g_cfg.machine ? ID_SCOPE_M : ID_SCOPE_U, BST_CHECKED);
+    }
     /* progress */
     mk(P_PROGRESS, L"STATIC", TR("파일을 복사하는 중...", "Copying files..."), SS_LEFT, 0, 22, 120, 460, 20, ID_STATUS, NULL);
     mk(P_PROGRESS, PROGRESS_CLASSW, L"", 0, 0, 22, 148, 470, 22, ID_BAR, NULL);
@@ -543,7 +579,10 @@ static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg)
     {
-    case WM_CREATE: g_wnd = h; buildUi(); return 0;
+    case WM_CREATE:
+        g_wnd = h; buildUi();
+        if (g_autoInstall) { showPage(P_PROGRESS); CloseHandle(CreateThread(NULL, 0, installThread, NULL, 0, NULL)); }
+        return 0;
     case WM_CTLCOLORSTATIC:
     {
         HWND c = (HWND)lp; int id = GetDlgCtrlID(c);
@@ -575,6 +614,11 @@ static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
             EnableWindow(GetDlgItem(h, ID_NEXT), IsDlgButtonChecked(h, ID_AGREE));
             break;
         case ID_BROWSE: browseFolder(); break;
+        case ID_SCOPE_U: case ID_SCOPE_M:
+            g_cfg.machine = IsDlgButtonChecked(h, ID_SCOPE_M) == BST_CHECKED;
+            defaultInstallDir(g_installDir, MAX_PATH);
+            SetDlgItemTextW(h, ID_DIR, g_installDir);
+            break;
         case ID_BACK:
             if (g_page == P_FOLDER) showPage(g_license ? P_LICENSE : P_WELCOME);
             else if (g_page == P_LICENSE) showPage(P_WELCOME);
@@ -589,6 +633,20 @@ static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
                 { MessageBoxW(h, TR("올바른 폴더 경로를 입력하세요.", "Enter a valid folder path."), g_cfg.name, MB_ICONWARNING); break; }
                 g_cfg.desktop = IsDlgButtonChecked(h, ID_DESK) == BST_CHECKED;
                 g_cfg.startmenu = IsDlgButtonChecked(h, ID_START) == BST_CHECKED;
+                if (g_cfg.machine && !isAdmin())
+                {   /* all users chosen: continue in an elevated copy that installs right away */
+                    wchar_t self[MAX_PATH], args[MAX_PATH + 96];
+                    GetModuleFileNameW(NULL, self, MAX_PATH);
+                    _snwprintf_s(args, MAX_PATH + 96, _TRUNCATE, L"/elevated-install /ALLUSERS \"/D=%s\"%s%s",
+                                 g_installDir, g_cfg.desktop ? L"" : L" /NODESKTOP", g_cfg.startmenu ? L"" : L" /NOSTARTMENU");
+                    SHELLEXECUTEINFOW se; memset(&se, 0, sizeof(se));
+                    se.cbSize = sizeof(se); se.hwnd = h; se.lpVerb = L"runas"; se.lpFile = self; se.lpParameters = args; se.nShow = SW_SHOWNORMAL;
+                    if (ShellExecuteExW(&se)) { g_page = P_FINISH; DestroyWindow(h); }
+                    else MessageBoxW(h, TR("모든 사용자용 설치에는 관리자 권한이 필요합니다.\n'나만 사용'을 고르거나 권한 요청을 허용하세요.",
+                                           "Installing for all users requires administrator rights.\nChoose 'for me only' or allow the prompt."),
+                                     g_cfg.name, MB_ICONWARNING);
+                    break;
+                }
                 showPage(P_PROGRESS);
                 CloseHandle(CreateThread(NULL, 0, installThread, NULL, 0, NULL));
             }
@@ -656,9 +714,15 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE prev, LPWSTR cmdLine, int show)
     g_ko = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_KOREAN;
     int argc = 0; wchar_t **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     int uninstall = 0, uninstallRun = 0; wchar_t runDir[MAX_PATH] = L"", dirArg[MAX_PATH] = L"";
+    int forceMachine = 0, forceUser = 0, noDesk = 0, noStart = 0;
     for (int i = 1; i < argc; i++)
     {
         if (!_wcsicmp(argv[i], L"/S") || !_wcsicmp(argv[i], L"/SILENT") || !_wcsicmp(argv[i], L"/VERYSILENT")) g_silent = 1;
+        else if (!_wcsicmp(argv[i], L"/ALLUSERS")) forceMachine = 1;
+        else if (!_wcsicmp(argv[i], L"/CURRENTUSER")) forceUser = 1;
+        else if (!_wcsicmp(argv[i], L"/elevated-install")) g_autoInstall = 1;
+        else if (!_wcsicmp(argv[i], L"/NODESKTOP")) noDesk = 1;
+        else if (!_wcsicmp(argv[i], L"/NOSTARTMENU")) noStart = 1;
         else if (!_wcsicmp(argv[i], L"/uninstall")) uninstall = 1;
         else if (!_wcsicmp(argv[i], L"/uninstall-run") && i + 1 < argc) { uninstallRun = 1; wcsncpy_s(runDir, MAX_PATH, argv[++i], _TRUNCATE); }
         else if (!_wcsnicmp(argv[i], L"/D=", 3)) wcsncpy_s(dirArg, MAX_PATH, argv[i] + 3, _TRUNCATE);
@@ -723,7 +787,18 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE prev, LPWSTR cmdLine, int show)
     }
 
     /* install */
-    if (g_cfg.machine && !isAdmin())
+    if (noDesk) g_cfg.desktop = 0;
+    if (noStart) g_cfg.startmenu = 0;
+    if (g_cfg.ask)
+    {   /* user-chosen scope: flags win, otherwise follow an existing install (default: current user) */
+        if (forceMachine) g_cfg.machine = 1;
+        else if (forceUser) g_cfg.machine = 0;
+        else g_cfg.machine = uninstallKeyExists(HKEY_LOCAL_MACHINE) && !uninstallKeyExists(HKEY_CURRENT_USER);
+    }
+    else if (forceMachine || forceUser)
+        g_cfg.machine = forceMachine;
+    /* fixed all-users (or silent /ALLUSERS): elevate now; in "ask" mode the wizard elevates on Install */
+    if (g_cfg.machine && !isAdmin() && (!g_cfg.ask || g_silent))
     {
         if (relaunchElevated(NULL)) return 0;
         if (!g_silent) MessageBoxW(NULL, TR("모든 사용자용 설치에는 관리자 권한이 필요합니다.", "Installing for all users requires administrator rights."), g_cfg.name, MB_ICONERROR);

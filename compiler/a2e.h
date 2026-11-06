@@ -51,7 +51,7 @@ typedef struct {
     /* --- output: single exe or setup wizard --- */
     int     outputMode;                /* OUT_EXE / OUT_SETUP */
     wchar_t appName[128], publisher[128], installDir[128];
-    int     perMachine;                /* 0 = current user (no admin), 1 = all users */
+    int     perMachine;                /* 0 = current user (no admin), 1 = all users, 2 = ask in the wizard */
     wchar_t license[MAX_PATH];
     int     scDesktop, scStartMenu, runAfterInstall;
     wchar_t setupOut[MAX_PATH];
@@ -90,6 +90,8 @@ void optsDefaults(Opts *o);
  * (the .exe, or the Setup.exe in setup mode). g_lastExe = the produced .exe. */
 int  compileScript(const Opts *src, wchar_t *finalOut, size_t cch);
 extern wchar_t g_lastExe[MAX_PATH];
+/* ;@AhkWeb-Include items written in the script itself (for display). */
+int  scriptDirectiveIncludes(const wchar_t *script, IncItem *out, int max);
 
 /* GUI (a2e_gui.c) */
 int  runGui(const wchar_t *initSrc);

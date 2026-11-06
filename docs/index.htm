@@ -86,15 +86,18 @@ REM -> AhkWeb2Exe.exe, AutoHotkeyWeb.bin</pre>
 <tr><td>창 옵션</td><td>x y Center -Resize Frameless AlwaysOnTop NoActivate OpacityNNN.</td></tr>
 <tr><td><code>WebGuiGet, Out, …:Eval/Hwnd</code></td><td>웹→AHK 동기 값 가져오기, 창 핸들.</td></tr>
 <tr><td><code>;@AhkWeb-Assets dist</code></td><td>컴파일 시 웹 자산을 EXE에 번들(단일 EXE 앱).</td></tr>
+<tr><td><code>;@AhkWeb-Include data</code></td><td>아무 파일·폴더나 EXE에 포함, 실행 시 <code>A_AhkWebFiles</code>에 추출. <a href="lib/Compile.htm#files">자세히</a></td></tr>
+<tr><td><code>;@AhkWeb-Setup</code></td><td>EXE와 함께 설치 마법사(Setup.exe) 생성. <a href="lib/Compile.htm#setup">자세히</a></td></tr>
 </table>
 
 <h2 id="vars">추가 내장 변수</h2>
 <table class="info">
 <tr><th>변수</th><th>값</th></tr>
 <tr><td><code>A_AhkWebVersion</code></td><td>엔진 버전(원본 AutoHotkey, 예: 1.1.37.02).</td></tr>
-<tr><td><code>A_AhkWebBuild</code></td><td>포크 빌드 버전(날짜 기반, 예: 2026.11.1). 업데이트 이력은 <code>CHANGELOG.md</code>.</td></tr>
+<tr><td><code>A_AhkWebBuild</code></td><td>포크 빌드 버전(날짜 기반, 예: 2026.11.2). 업데이트 이력은 <code>CHANGELOG.md</code>.</td></tr>
 <tr><td><code>A_IsAhkWeb</code></td><td>이 엔진에서 <code>1</code>, stock AutoHotkey에서는 빈 값.</td></tr>
 <tr><td><code>A_AhkWebAssets</code></td><td>EXE에 내장된 웹 자산의 추출 경로(미컴파일 시 빈 값).</td></tr>
+<tr><td><code>A_AhkWebFiles</code></td><td>EXE에 포함한 파일(<code>;@AhkWeb-Include</code>)이 풀린 폴더. 미컴파일 시 <code>A_ScriptDir</code>. <a href="lib/Compile.htm#files">컴파일 &gt; 파일 포함</a></td></tr>
 </table>
 
 <h2 id="license">라이선스 · 배포 · 책임</h2>

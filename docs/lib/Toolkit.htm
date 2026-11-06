@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="HTTP, URL, JSON, ZIP, 인코딩, 파일, 이미지, QR, 클립보드 이미지, 문자열·유사도 내장 함수.">
+<title>툴킷 함수 | AutoHotkey Web</title>
+<link rel="stylesheet" href="../static/theme.css">
+</head>
+<body>
+<div class="nav"><a href="../index.htm">AutoHotkey Web</a> &raquo; <a href="../index.htm#commands">함수</a> &raquo; 툴킷</div>
+
+<h1>툴킷 함수</h1>
+<p>외부 툴킷 기능을 엔진에 내장했습니다. 이름 규칙은 <strong><code>Note_X()</code> → <code>X()</code></strong>(접두사 제거)이며, DLL·<code>Note_Init()</code>·<code>#Include</code>가 필요 없습니다. stock v1에 이미 있는 기능(파일 복사, 프로세스, 마우스, Ini 읽기/쓰기, PixelSearch 등)은 중복으로 넣지 않았습니다.</p>
+<div class="note">이름이 바뀐 것: <code>Note_GenKeyPair/Sign/Verify</code> → <code>EcdsaKeyPair/EcdsaSign/EcdsaVerify</code>, <code>Note_Entropy</code> → <code>StrEntropy</code>, <code>Note_Upper/Lower/TitleCase/Repeat/Reverse/PadLeft/PadRight/CountSub</code> → <code>StrUpper/StrLower/StrTitle/StrRepeat/StrReverse/StrPadLeft/StrPadRight/StrCount</code>(v2와 같은 이름). 스크립트에 같은 이름의 함수가 있으면 스크립트 함수가 우선합니다.</div>
+
+<h2 id="http">HTTP · URL · JSON</h2>
+<table class="info">
+<tr><td><code>HttpGet(url)</code>, <code>HttpPost(url [, body, contentType])</code>, <code>HttpLastStatus()</code></td><td>응답 본문(UTF-8). 상태코드는 따로 조회.</td></tr>
+<tr><td><code>HttpDownload(url, outPath)</code>, <code>HttpUploadFile(url, filePath [, field, fileName, extra])</code></td><td>다운로드 1/0, multipart 업로드 → 응답</td></tr>
+<tr><td><code>DownloadStart(url, out)</code> → id, <code>DownloadStatus(id)</code>, <code>DownloadFree(id)</code></td><td>백그라운드 다운로드</td></tr>
+<tr><td><code>HttpJobStart(method, url [, headers, body, timeoutMs, maxRetry])</code> → id<br><code>HttpJobStatus HttpJobResult HttpJobHeaders HttpJobError HttpJobFree HttpJobWaitAny HttpJobSetConcurrency HttpJobSetMinGap HttpJobCancelAll HttpJobPoolInfo</code></td><td>병렬 요청 풀. 상태 <code>"state,http,tries,err,ms"</code>(state 0대기 1실행 2완료 3실패)</td></tr>
+<tr><td><code>UrlEncode UrlDecode QueryGet(query, key) HtmlEncode HtmlDecode</code></td><td>URL·HTML</td></tr>
+<tr><td><code>JsonParse JsonStringify JsonGet JsonValid JsonPretty</code></td><td>JSON (<a href="Chaining.htm#json">자세히</a>)</td></tr>
+<tr><td><code>WsConnect(url)</code> → id, <code>WsSend(id, text) WsReceive(id) WsClose(id)</code></td><td>WebSocket 클라이언트 (서버는 <a href="Cdp.htm">WsServer*</a>)</td></tr>
+</table>
+
+<h2 id="zip">ZIP · 압축 · 인코딩 · 파일</h2>
+<table class="info">
+<tr><td><code>ZipAddFile(zip, src, nameInZip [, level])</code>, <code>ZipList(zip)</code>, <code>ZipExtractAll(zip, dir)</code>, <code>ZipExtractFile(zip, name, out)</code></td><td>ZIP (zip 없으면 새로 생성)</td></tr>
+<tr><td><code>Compress(text [, level])</code> / <code>Decompress(b64)</code>, <code>CompressFile</code> / <code>DecompressFile</code></td><td>DEFLATE</td></tr>
+<tr><td><code>DetectEncoding(path)</code>, <code>ConvertToUtf8(in, out)</code></td><td>utf8bom / utf8 / utf16le / ansi …</td></tr>
+<tr><td><code>FileRecycle(path) DirRecycle(path)</code></td><td>휴지통으로 이동(복구 가능)</td></tr>
+<tr><td><code>DirList(dir [, pattern]) SpecialFolder(which) TempFile() FormatBytes(n) WatchFolder(dir [, sub, ms]) IniKeys(path, section)</code></td><td>기타 파일 유틸</td></tr>
+</table>
+
+<h2 id="image">화면 · 이미지 · QR · 클립보드 이미지</h2>
+<table class="info">
+<tr><td><code>ImageSearchAll(img, x1, y1, x2, y2 [, tol, max])</code></td><td>모든 일치 위치 <code>"x,y;x,y"</code></td></tr>
+<tr><td><code>MatchTemplate(img, x1, y1, x2, y2 [, minPct, maxPct, stepPct, step])</code></td><td>크기가 달라도 찾는 템플릿 매칭 <code>"x,y,score,scale"</code></td></tr>
+<tr><td><code>DetectColor(x1, y1, x2, y2, rgb [, tol, minPixels])</code>, <code>ColorDistance RgbToHsv HsvToRgb</code></td><td>색 영역·변환</td></tr>
+<tr><td><code>CaptureRegion(x, y, w, h, out)</code>, <code>CaptureRegionRotated(…, angle, out)</code>, <code>SelectRegion()</code>, <code>MonitorsJson()</code></td><td>화면 캡처·영역 선택</td></tr>
+<tr><td><code>QrEncode(text, outPng [, scale, border, ecc])</code></td><td>QR 코드 PNG</td></tr>
+<tr><td><code>ClipboardImageToPng(out)</code>, <code>PngToClipboardImage(in)</code></td><td>클립보드 이미지</td></tr>
+<tr><td><code>ImageWidth ImageHeight ImageResize ImageConvert ImageRotate ImageEnhance ImageQuality</code></td><td>이미지 처리 (GDI+)</td></tr>
+</table>
+
+<h2 id="string">문자열 · 유사도 · CSV · 시간 · 수학</h2>
+<table class="info">
+<tr><td><code>StrUpper StrLower StrTitle StrRepeat StrReverse StrPadLeft StrPadRight StrCount Slugify HangulChosung ToHalfWidth NaturalCompare ToBase FromBase ToRoman FromRoman</code></td><td>문자열 (메소드로도 사용)</td></tr>
+<tr><td><code>Levenshtein SimilarityRatio JaroWinkler DamerauLevenshtein DamerauRatio Hamming JaccardChar DiceCoefficient CosineChar LcsLength NgramSimilarity FuzzyBestMatch FuzzyBestMatchEx</code></td><td>유사도(0~100 또는 거리)</td></tr>
+<tr><td><code>CsvGet(csv, row, col) CsvRowCount CsvColCount</code></td><td>RFC 4180 CSV</td></tr>
+<tr><td><code>NowUnix UnixToIso IsoToUnix Gcd Lcm</code></td><td>시간·수학</td></tr>
+</table>
+<p>OCR은 <a href="Ocr.htm">한글 OCR</a>, 암호화는 <a href="Crypto.htm">암호화</a> 문서를 보세요.</p>
+
+<h2 id="example">예제</h2>
+<pre>repo := HttpGet("https://api.github.com/repos/AutoHotkey/AutoHotkey").JsonParse()
+MsgBox % repo.Get("full_name") " ★" repo.Get("stargazers_count")
+
+ZipAddFile("backup.zip", A_ScriptFullPath, "src/" A_ScriptName)
+QrEncode("https://www.autohotkey.com", A_Temp "\qr.png")</pre>
+<p>전체 예제: <code>examples\07_HTTP_ZIP_QR\demo.ahk</code></p>
+<footer>AutoHotkey Web &middot; 툴킷 &middot; <span class="lic">GPLv2 · <a href="../index.htm#license">라이선스 · 배포 · 책임</a></span></footer>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>AutoHotkey Web - bridge test</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; margin: 24px; }
+  button { font-size: 16px; padding: 8px 16px; margin-right:8px; }
+  pre { background:#f4f4f4; padding:12px; border-radius:6px; min-height:40px; }
+</style>
+</head>
+<body>
+  <h2>AutoHotkey Web bridge test</h2>
+  <button id="ping">Call AHK: Add(3,4)</button>
+  <button id="save">Call AHK: SaveNote</button>
+  <pre id="log"></pre>
+  <script>
+    const log = (m) => { document.getElementById('log').textContent += m + "\n"; };
+    ahk.on("tick", (data) => log("event tick: " + data));
+    document.getElementById('ping').onclick = async () => {
+      const r = await ahk.call("Add", { a: 3, b: 4 });
+      log("Add(3,4) -> " + r);
+    };
+    document.getElementById('save').onclick = async () => {
+      const r = await ahk.call("SaveNote", { text: "hello AutoHotkey Web" });
+      log("SaveNote -> " + r);
+    };
+    ahk.post("__Ready", { href: location.href });
+    log("page loaded, bridge = " + (window.ahk && window.ahk.__ahkweb));
+  </script>
+</body>
+</html>

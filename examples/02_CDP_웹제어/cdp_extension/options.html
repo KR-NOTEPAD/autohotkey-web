@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>AHK CDP Bridge</title>
+<style>
+  body { font: 13px/1.5 "Malgun Gothic", sans-serif; margin: 0; padding: 14px; min-width: 300px; color: #222; background: #fff; }
+  h1 { font-size: 15px; margin: 0 0 10px; }
+  label { display: block; margin: 8px 0 4px; }
+  input { width: 120px; padding: 4px 6px; font-size: 13px; }
+  button { padding: 5px 12px; margin-right: 6px; cursor: pointer; }
+  .row { margin-top: 10px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; background: #bbb; }
+  .on { background: #2ecc71; } .off { background: #e74c3c; }
+  .muted { color: #777; font-size: 12px; }
+  code { background: #f3f3f3; padding: 1px 4px; }
+</style>
+</head>
+<body>
+  <h1>AHK CDP Bridge</h1>
+  <div><span id="dot" class="dot"></span><span id="status">상태 확인 중…</span></div>
+  <div class="muted" id="attached"></div>
+  <label>AHK 서버 포트 (<code>Note_WsServerStart(포트)</code> 와 동일)</label>
+  <input id="port" type="number" min="1024" max="65535">
+  <div class="row">
+    <button id="save">저장 후 재접속</button>
+    <button id="reconnect">재접속</button>
+  </div>
+  <p class="muted">AHK 스크립트에서 <code>new Cdp()</code> 를 실행하면 자동으로 연결됩니다.<br>
+  연결이 안 되면 AHK 스크립트가 실행 중인지, 포트가 같은지 확인하세요.</p>
+  <script src="options.js"></script>
+</body>
+</html>

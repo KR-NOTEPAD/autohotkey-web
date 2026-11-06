@@ -1,0 +1,24 @@
+AHK CDP Bridge — 크롬/엣지 확장
+
+설치 (1회)
+  1. 크롬 주소창: chrome://extensions   (엣지: edge://extensions)
+  2. 우상단 "개발자 모드" 켜기
+  3. "압축해제된 확장 프로그램 로드" → 이 폴더(cdp_extension) 선택
+  4. 확장 아이콘 클릭 → 포트(기본 19222) 확인. AHK 에서 new Cdp() 를 실행하면 "AHK 연결됨" 으로 바뀜
+
+동작
+  - ws://127.0.0.1:<포트> 로 AHK(WsServer) 에 접속. 끊기면 1.5초 후 재접속, 서비스워커가
+    잠들어도 30초 알람으로 깨어나 재접속.
+  - AHK 요청 {"id","cmd",...} 를 받아 chrome.debugger / chrome.scripting / chrome.tabs 로 처리하고
+    {"id","ok","result"} 로 응답. CDP 이벤트·탭 이동 이벤트는 {"event":...} 로 푸시.
+  - 권한: debugger(CDP), tabs, scripting(<all_urls>), storage, alarms, webNavigation
+
+파일
+  manifest.json   MV3 매니페스트
+  background.js   서비스워커(브리지 본체, cmd 목록은 파일 상단 주석)
+  options.html/js 포트 설정 + 연결 상태 팝업
+
+주의
+  - Chrome 137+ 는 --load-extension 플래그를 무시하므로 위 수동 로드만 가능.
+  - 폴더를 옮기면 확장이 깨지므로 chrome://extensions 에서 다시 로드.
+  - 확장을 수정했으면 chrome://extensions 의 새로고침(↻) 버튼으로 재로드.

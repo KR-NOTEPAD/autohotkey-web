@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="AutoHotkey Web - AutoHotkey v1.1 기반 하이브리드 웹 UI 엔진.">
+<title>AutoHotkey Web - 문서</title>
+<link rel="stylesheet" href="static/theme.css">
+</head>
+<body>
+
+<h1>AutoHotkey Web</h1>
+<p><strong>AutoHotkey Web</strong>은 AutoHotkey v1.1.37.02를 포크한 독립 실행 엔진입니다. 문법은 v1과 <strong>완전히 동일</strong>하며, 다음 기능이 네이티브로 추가되었습니다.</p>
+<ul>
+<li><a href="lib/WebGui.htm"><strong>WebGui</strong></a> &mdash; HTML/CSS/JS(React·Vue 등) UI를 WebView2로 띄우고 AHK와 연결하는 하이브리드 앱 명령.</li>
+<li><a href="lib/DeepLearning.htm"><strong>TextCls / TextNN</strong></a> &mdash; ONNX 기반 한국어 텍스트 분류·즉석 학습 내장 함수.</li>
+<li><a href="lib/Cdp.htm"><strong>WsServer / Cdp.ahk</strong></a> &mdash; 내장 WebSocket 서버로 Chrome(CDP) 제어.</li>
+<li><a href="lib/Chaining.htm"><strong>메소드 체이닝 / JSON</strong></a> &mdash; <code>"  a,b ".Trim().Split(",").Join("|")</code>, <code>arr.Sort("N").Map(fn).Sum()</code>, <code>JsonParse/JsonStringify</code>.</li>
+<li><a href="lib/Ocr.htm"><strong>한글 OCR</strong></a> &mdash; 딥러닝(PaddleOCR) <code>OcrImageAI/OcrScreenAI</code> + Windows 내장 <code>OcrImage/OcrScreen</code>.</li>
+<li><a href="lib/Crypto.htm"><strong>암호화</strong></a> &mdash; SHA·HMAC, AES-256-GCM 문자열/파일, 비밀번호 해시, DPAPI, ECDSA 서명, 보안 난수.</li>
+<li><a href="lib/Compile.htm"><strong>컴파일 / EXE 암호화</strong></a> &mdash; AhkWeb2Exe, 스크립트 자동 난독화·압축, 안티치트 오탐을 줄이는 중립 창 클래스/식별자.</li>
+<li><a href="lib/Toolkit.htm"><strong>툴킷</strong></a> &mdash; HTTP·병렬요청·WebSocket 클라이언트, ZIP·인코딩·휴지통, 이미지서치 전체·템플릿매칭·QR·클립보드 이미지, 문자열 유사도·CSV.</li>
+</ul>
+
+<div class="note">기존 v1 스크립트는 그대로 실행됩니다. 원본 AutoHotkey 설치와 창 클래스·레지스트리·컴파일 마커가 분리되어 <strong>공존</strong>합니다.</div>
+
+<h2 id="install">설치 (권장)</h2>
+<p><code>installer\output\AutoHotkeyWeb_Setup_*.exe</code>를 실행하면 전부 자동 설치됩니다(한국어/영어 마법사).</p>
+<ul>
+<li>엔진·컴파일러·문서를 <code>C:\Program Files\AutoHotkey Web</code>에 설치.</li>
+<li><code>.ahkw</code> 파일 형식 등록(더블클릭 실행, 우클릭 Edit→SciTE4, Compile→EXE).</li>
+<li><strong>우클릭 → 새로 만들기 → "AutoHotkey Web Script"</strong> 추가(한글 포함 UTF-8 BOM 템플릿).</li>
+<li>SciTE4에서 <code>.ahkw</code> 구문 강조·실행·디버그·컴파일·자동완성 자동 구성.</li>
+<li>WebView2 런타임 유무 점검, 제거 프로그램 포함.</li>
+</ul>
+<div class="note">Windows의 "새로 만들기" 메뉴는 한 단계 평면 목록이라, 항목은 stock "AutoHotkey Script" 옆에 <strong>"AutoHotkey Web Script"</strong>로 나타납니다. 생성 파일 확장자는 <code>.ahkw</code>이며, 한글 내용이 깨지지 않도록 템플릿은 UTF-8 BOM으로 복사됩니다.</div>
+
+<h2 id="start">직접 빌드</h2>
+<h3>빌드</h3>
+<pre>REM 1) WebView2 SDK 받기 (최초 1회)
+powershell -ExecutionPolicy Bypass -File fetch_webview2.ps1
+
+REM 2) 엔진 빌드 (x64 Native Tools Command Prompt 권장)
+build.bat
+REM -> AutoHotkeyWeb.exe 생성
+
+REM 3) 컴파일러 + .bin 베이스 빌드
+cd compiler
+build_compiler.bat
+REM -> AhkWeb2Exe.exe, AutoHotkeyWeb.bin</pre>
+
+<h3>실행 / 컴파일</h3>
+<table class="info">
+<tr><th>작업</th><th>명령</th></tr>
+<tr><td>스크립트 실행</td><td><code>AutoHotkeyWeb.exe myapp.ahk</code></td></tr>
+<tr><td>단일 EXE로 컴파일</td><td><code>AhkWeb2Exe.exe /in myapp.ahk /out myapp.exe</code></td></tr>
+</table>
+
+<h3 id="scite">SciTE4AutoHotkey에서 개발</h3>
+<p>설치 프로그램이 SciTE4 폴더에 <code>AutoHotkeyWeb.properties</code>를 만들고 <code>SciTEGlobal.properties</code>에서 import 합니다(PC 전체 적용). <code>.ahkw</code> 파일에만 적용되므로 기존 <code>.ahk</code> 설정은 바뀌지 않습니다.</p>
+<ul>
+<li><code>.ahkw</code>를 열면 AHK 구문 강조와 글꼴이 그대로 적용됩니다(플랫폼 선택 불필요).</li>
+<li><strong>F5</strong> 실행 / <strong>F7</strong> 디버그 / <strong>Ctrl+F7</strong> 컴파일 / <strong>F1</strong> 도움말이 이 엔진을 사용합니다.</li>
+<li>새 함수와 체이닝 메소드가 자동완성/콜팁(<code>scite\ahkweb.api</code>)에 등록됨.</li>
+</ul>
+<div class="note">디버거는 stock SciTE4의 DBGp 하네스를 그대로 씁니다(appid를 "AutoHotkey"로 유지).</div>
+
+<h2 id="commands">레퍼런스</h2>
+<ul>
+<li><a href="lib/WebGui.htm">WebGui</a> &mdash; 웹 UI 창과 브릿지</li>
+<li><a href="lib/DeepLearning.htm">TextCls / TextNN</a> &mdash; 딥러닝 분류·학습</li>
+<li><a href="lib/Cdp.htm">WsServer / Cdp.ahk</a> &mdash; CDP 웹 제어</li>
+<li><a href="lib/Chaining.htm">메소드 체이닝 / JSON</a> &mdash; 문자열·배열·객체 메소드</li>
+<li><a href="lib/Ocr.htm">한글 OCR</a> &mdash; AI + Windows OCR</li>
+<li><a href="lib/Crypto.htm">암호화</a> &mdash; 해시·AES·DPAPI·서명</li>
+<li><a href="lib/Toolkit.htm">툴킷</a> &mdash; HTTP·ZIP·이미지·QR·문자열</li>
+<li><a href="lib/Compile.htm">컴파일 / EXE 암호화</a> &mdash; AhkWeb2Exe·난독화·중립 식별자</li>
+</ul>
+
+<h2 id="features">WebGui 기능 요약</h2>
+<table class="info">
+<tr><th>기능</th><th>설명</th></tr>
+<tr><td><code>WebGui, New/Load/Show/Hide/Destroy</code></td><td>웹 창 생명주기.</td></tr>
+<tr><td><code>WebGui, Expose / On / Emit / Eval</code></td><td>JS↔AHK 비동기 브릿지.</td></tr>
+<tr><td><code>WebGui, Mount</code></td><td>가상 호스트→폴더. ES 모듈·fetch가 되는 진짜 오리진.</td></tr>
+<tr><td><code>WebGui, DevTools</code></td><td>개발자 도구 열기.</td></tr>
+<tr><td>창 옵션</td><td>x y Center -Resize Frameless AlwaysOnTop NoActivate OpacityNNN.</td></tr>
+<tr><td><code>WebGuiGet, Out, …:Eval/Hwnd</code></td><td>웹→AHK 동기 값 가져오기, 창 핸들.</td></tr>
+<tr><td><code>;@AhkWeb-Assets dist</code></td><td>컴파일 시 웹 자산을 EXE에 번들(단일 EXE 앱).</td></tr>
+</table>
+
+<h2 id="vars">추가 내장 변수</h2>
+<table class="info">
+<tr><th>변수</th><th>값</th></tr>
+<tr><td><code>A_AhkWebVersion</code></td><td>엔진 버전(원본 AutoHotkey, 예: 1.1.37.02).</td></tr>
+<tr><td><code>A_AhkWebBuild</code></td><td>포크 빌드 버전(날짜 기반, 예: 2026.11.1). 업데이트 이력은 <code>CHANGELOG.md</code>.</td></tr>
+<tr><td><code>A_IsAhkWeb</code></td><td>이 엔진에서 <code>1</code>, stock AutoHotkey에서는 빈 값.</td></tr>
+<tr><td><code>A_AhkWebAssets</code></td><td>EXE에 내장된 웹 자산의 추출 경로(미컴파일 시 빈 값).</td></tr>
+</table>
+
+<h2 id="license">라이선스 · 배포 · 책임</h2>
+<ul>
+<li><strong>소스 공개 의무:</strong> 이 소스로 만든 바이너리를 배포하면(<code>AhkWeb2Exe</code>로 컴파일한 <code>.exe</code> 포함) 대응하는 전체 소스를 GPLv2로 공개해야 합니다. 컴파일 exe의 스크립트 난독화는 소스 공개 의무를 면제하지 않습니다.</li>
+<li><strong>서드파티(별도 라이선스):</strong> ONNX Runtime(MIT), Microsoft Edge WebView2 SDK(별도 약관), miniz·cJSON·qrcodegen(MIT). 이들의 라이선스·고지를 함께 지켜야 합니다.</li>
+<li><strong>번들 모델(별도 라이선스, 재배포 가능):</strong> kor_unsmile(Apache-2.0), KoSimCSE(CC BY-SA 4.0 — 출처표시+동일조건), PP-OCRv5 한글(Apache-2.0). 출처 표시 문구와 상세는 저장소의 <code>MODELS.md</code>를 참고하세요.</li>
+<li><strong>상표:</strong> "AutoHotkey"는 원 상표권자의 상표이며, 본 포크는 원 프로젝트와 <strong>무관</strong>합니다. 배포 exe의 창 클래스·버전 문자열은 중립화되어 있습니다(개발용 인터프리터는 디버거 호환을 위해 "AutoHotkey" 유지). 제품명에 "AutoHotkey"를 쓰기 전 상표 사용 가부를 확인하세요.</li>
+</ul>
+<div class="note">전체 라이선스 전문은 배포물의 <code>LICENSE</code> 파일에 있습니다. 이 요약은 편의를 위한 것이며 법률 자문이 아닙니다.</div>
+
+<footer>AutoHotkey Web &middot; AutoHotkey v1.1.37.02 기반 &middot; GPLv2</footer>
+</body>
+</html>

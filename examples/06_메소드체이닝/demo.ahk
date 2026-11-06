@@ -1,0 +1,73 @@
+﻿; ============================================================================
+;  AutoHotkey Web 예제 6 - 메소드 체이닝 (엔진 내장, v1 문법 그대로)
+;  문자열·배열·객체에 메소드를 이어 붙여 데이터를 한 줄로 가공합니다.
+;  규칙: 사용자가 만든 클래스 메소드·키·"".base 확장이 항상 우선합니다.
+;  실행: AutoHotkeyWeb.exe demo.ahk
+; ============================================================================
+#NoEnv
+#SingleInstance Force
+r := ""
+
+; ---- 문자열 -----------------------------------------------------------------------
+r .= "[문자열]`r`n"
+r .= "  hello world ".Trim().Title() "`r`n"                          ; Hello World
+r .= "a,b,,c".Split(",").Compact().Join(" | ") "`r`n"               ; a | b | c
+r .= "대한민국 서울특별시".Chosung() "`r`n"                           ; ㄷㅎㅁㄱ ㅅㅇㅌㅂㅅ
+r .= "Ｈｅｌｌｏ　１２３".HalfWidth() "`r`n"                          ; 전각 → 반각
+r .= "Hello AutoHotkey".Replace("Hello", "Hi").Upper().Left(6) "`r`n"
+r .= "파일명: " "  My Report (Final).PDF ".Trim().Lower().Slug() "`r`n"
+r .= "포맷: " "{1}님 {2:05}점".Format("홍길동", 97) "`r`n"
+r .= "검사: " ("010-1234".StartsWith("010") ? "휴대폰" : "기타") ", 숫자? " "12.5".IsNumber() "`r`n"
+line := "사과=1200"
+r .= "길이: " line.Length " / 포함: " line.Contains("사과") " / 오른쪽 4: " line.Right(4) "`r`n`r`n"
+
+; ---- 배열 -------------------------------------------------------------------------
+IsEven(v) {
+    return Mod(v, 2) = 0
+}
+Square(v) {
+    return v * v
+}
+r .= "[배열]`r`n"
+nums := [5, 3, 8, 1, 9, 2]
+r .= "정렬→역순   : " nums.Sort("N").Reverse().Join(", ") "`r`n"
+r .= "짝수 제곱 합 : " nums.Filter("IsEven").Map("Square").Sum() "`r`n"     ; 8²+2² = 68
+r .= "통계        : 합 " nums.Sum() ", 평균 " Round(nums.Avg(), 2) ", 최대 " nums.Max() ", 중앙값 " nums.Median() "`r`n"
+r .= "자르기/묶기 : " nums.Slice(2, 4).Join() " / " nums.Chunk(2).ToJson(false) "`r`n"
+r .= "포함 여부   : 8→" nums.Has(8) "  위치→" nums.IndexOf(8) "`r`n"
+r .= "합치기/중복제거 : " nums.Union([1, 2, 100]).Join() "`r`n`r`n"
+
+; ---- 객체 배열 (표 형태 데이터) -----------------------------------------------------
+staff := [ {name: "김철수", dept: "개발", age: 31, pay: 4200}
+         , {name: "이영희", dept: "디자인", age: 27, pay: 3800}
+         , {name: "박민수", dept: "개발", age: 45, pay: 6100}
+         , {name: "최지은", dept: "기획", age: 38, pay: 5000} ]
+r .= "[객체 배열]`r`n"
+r .= "나이순 이름   : " staff.SortBy("age").Pluck("name").Join(" → ") "`r`n"
+r .= "개발팀 급여합 : " staff.Where("dept", "개발").Sum("pay") "`r`n"
+r .= "급여 TOP2     : " staff.Top(2, "pay").Pluck("name").Join(", ") "`r`n"
+g := staff.GroupBy("dept")
+r .= "부서별 인원   : 개발 " g["개발"].Length() ", 디자인 " g["디자인"].Length() ", 기획 " g["기획"].Length() "`r`n"
+r .= "30대 있나?    : " staff.Any(Func("InThirties")) "   전원 성인? " staff.All(Func("IsAdult")) "`r`n`r`n"
+InThirties(p) {
+    return p.age >= 30 && p.age < 40
+}
+IsAdult(p) {
+    return p.age >= 20
+}
+
+; ---- JSON + 경로 접근 -------------------------------------------------------------
+r .= "[JSON]`r`n"
+cfg := "{""app"":{""name"":""데모"",""window"":{""w"":800,""h"":600}},""tags"":[""a"",""b""]}".JsonParse()
+r .= "읽기 : " cfg.Get("app.window.w") "x" cfg.Get("app.window.h") ", 없는 키 기본값: " cfg.Get("app.theme", "light") "`r`n"
+cfg.Set("app.window.w", 1024).Set("app.theme", "dark")             ; Set 은 this 를 돌려줘 체이닝 가능
+r .= "쓰기 : " JsonStringify(cfg) "`r`n"
+r .= "예쁘게:`r`n" StrReplace(cfg.ToJson(), "`n", "`r`n") "`r`n"
+
+Gui, Font, s10, Consolas
+Gui, Add, Edit, w820 h600 ReadOnly, %r%
+Gui, Show,, AutoHotkey Web - 메소드 체이닝
+return
+
+GuiClose:
+ExitApp

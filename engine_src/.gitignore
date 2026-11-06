@@ -1,0 +1,10 @@
+temp/
+bin*/
+ipch/
+.vs/
+*.suo
+*.user
+*.ncb
+*.aps
+*.sdf
+*.opensdf

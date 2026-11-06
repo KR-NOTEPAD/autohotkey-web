@@ -1,0 +1,33 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML><HEAD></HEAD><BODY>
+<OBJECT type="text/site properties"><param name="Window Styles" value="0x800025"></OBJECT>
+<UL>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="AutoHotkey Web">
+    <param name="Local" value="index.htm"></OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="WebGui">
+    <param name="Local" value="lib\WebGui.htm"></OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="TextCls / TextNN (딥러닝)">
+    <param name="Local" value="lib\DeepLearning.htm"></OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="WsServer / Cdp.ahk (CDP)">
+    <param name="Local" value="lib\Cdp.htm"></OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="메소드 체이닝 / JSON">
+    <param name="Local" value="lib\Chaining.htm"></OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="한글 OCR (AI + Windows)">
+    <param name="Local" value="lib\Ocr.htm"></OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="암호화">
+    <param name="Local" value="lib\Crypto.htm"></OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="툴킷 (HTTP·ZIP·이미지·QR·문자열)">
+    <param name="Local" value="lib\Toolkit.htm"></OBJECT>
+  <LI><OBJECT type="text/sitemap">
+    <param name="Name" value="컴파일 / EXE 암호화">
+    <param name="Local" value="lib\Compile.htm"></OBJECT>
+</UL>
+</BODY></HTML>

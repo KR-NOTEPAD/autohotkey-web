@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="WsServer*/JsonGet/Base64Decode 내장 함수와 번들 Lib\Cdp.ahk 로 Chrome DevTools Protocol 브라우저 제어를 수행합니다.">
+<title>CDP 웹 제어 (WsServer / Cdp.ahk) | AutoHotkey Web</title>
+<link rel="stylesheet" href="../static/theme.css">
+</head>
+<body>
+<div class="nav"><a href="../index.htm">AutoHotkey Web</a> &raquo; <a href="../index.htm#commands">함수</a> &raquo; CDP</div>
+
+<h1>CDP 웹 제어 &mdash; WsServer* / Cdp.ahk</h1>
+<p>실제 Chrome 을 <strong>Chrome DevTools Protocol(CDP)</strong> 로 제어합니다. 엔진에는 CDP 중계에 필요한 <strong>WebSocket 서버</strong>가 내장되어 있어(<code>WsServer*</code>), <strong>별도 DLL 이나 DllCall 없이</strong> 동작합니다. 고수준 API 는 번들 라이브러리 <code>Lib\Cdp.ahk</code> 로 제공합니다.</p>
+
+<div class="note"><strong>구성:</strong> AHK(엔진 내장 WsServer) &harr; 작은 Chrome 확장(<code>cdp_extension</code>) &harr; <code>chrome.debugger</code> API &harr; 브라우저 탭. 확장은 서버에 붙어 AHK 가 보내는 CDP 명령을 탭에 중계하고 결과를 돌려줍니다.</p></div>
+
+<h2 id="setup">준비 (1회)</h2>
+<ol>
+<li>Chrome 에서 <code>chrome://extensions</code> 열기 &rarr; 우상단 <strong>개발자 모드</strong> 켜기.</li>
+<li><strong>"압축해제된 확장 프로그램 로드"</strong> &rarr; 예제의 <code>examples\02_CDP_웹제어\cdp_extension</code> 폴더 선택.</li>
+<li>스크립트에서 <code>WsServerStart()</code> 로 서버를 켜면 확장이 자동으로 연결합니다(기본 포트 19222).</li>
+</ol>
+
+<h2>저수준 내장 함수 (WebSocket 서버)</h2>
+<table class="info">
+<tr><th>함수</th><th>설명</th></tr>
+<tr><td><code>WsServerStart([Port:=19222])</code></td><td>지정 포트에서 수신 시작. 성공 <code>1</code>/실패 <code>0</code>.</td></tr>
+<tr><td><code>WsServerStop()</code></td><td>서버 중지(<code>1</code>).</td></tr>
+<tr><td><code>WsServerPort()</code></td><td>현재 포트(중지 상태면 <code>0</code>).</td></tr>
+<tr><td><code>WsServerClients()</code></td><td>연결된 클라이언트 수(확장이 붙었는지 확인).</td></tr>
+<tr><td><code>WsServerPending()</code></td><td>수신 대기 중인 메시지 수.</td></tr>
+<tr><td><code>WsServerSend(Text)</code></td><td>텍스트 프레임을 모든 클라이언트에 브로드캐스트.</td></tr>
+<tr><td><code>WsServerRecv([TimeoutMs:=0])</code></td><td>수신 메시지 하나를 꺼내 반환(없으면 <code>""</code>).</td></tr>
+<tr><td><code>WsServerLastError()</code></td><td>마지막 오류 문자열.</td></tr>
+<tr><td><code>WsServerAvailable()</code></td><td>항상 <code>1</code>(엔진 내장).</td></tr>
+</table>
+
+<h2 id="json">JSON / Base64 보조 함수</h2>
+<pre class="Syntax">val := <span class="func">JsonGet</span>(JsonText, Path)
+raw := <span class="func">Base64Decode</span>(B64Text)</pre>
+<p><code>JsonGet</code> 은 JSON 문자열에서 <code>Path</code>(점/대괄호 표기)로 값을 꺼냅니다. CDP 응답 파싱에 쓰입니다.</p>
+<table class="info">
+<tr><th>반환</th><td>불리언은 문자열 <code>"true"</code>/<code>"false"</code>, null 은 <code>"null"</code> 로 반환됩니다. 따라서 <code>if (JsonGet(r, "result.value") = "true")</code> 처럼 비교할 수 있습니다.</td></tr>
+<tr><td colspan="2"><code>Base64Decode</code> 는 base64 문자열을 디코드해 반환합니다(스크린샷 등 CDP 바이너리 결과 처리용).</td></tr>
+</table>
+
+<h2 id="class">고수준 API &mdash; Lib\Cdp.ahk</h2>
+<p>대부분의 스크립트는 저수준 함수 대신 번들 라이브러리를 씁니다. 이 파일은 WsServer 서버와 확장을 감싸 명령/응답을 객체로 다룹니다. 외부 플러그인 의존이 제거되어 있어 <code>#Include</code> 만 하면 됩니다.</p>
+<pre class="Syntax"><span class="func">#Include</span> %A_ScriptDir%\..\..\Lib\Cdp.ahk</pre>
+<dl>
+<dt><code>cdp := new Cdp()</code></dt><dd>서버 기동 + 확장 연결 대기.</dd>
+<dt><code>tab := cdp.goto(Url)</code></dt><dd>활성 탭을 URL 로 이동하고 로드 완료까지 대기.</dd>
+<dt><code>val := tab.evaluate(Js)</code></dt><dd>페이지 컨텍스트에서 JS 실행 후 결과 반환.</dd>
+</dl>
+<div class="note">정확한 메서드 구성은 번들 <code>Lib\Cdp.ahk</code> 상단 주석과 <code>examples\02_CDP_웹제어\app.ahk</code> 를 참고하세요. 확장이 아직 안 붙었으면 <code>goto</code> 가 연결을 기다립니다.</div>
+
+<h2 id="example">예제 (저수준)</h2>
+<pre>; 서버를 켜고 확장 연결을 기다린 뒤, 활성 탭을 example.com 으로 이동
+if (!WsServerStart(19222)) {
+    MsgBox, % "서버 시작 실패: " WsServerLastError()
+    ExitApp
+}
+; 확장이 연결될 때까지 대기
+Loop {
+    if (WsServerClients() >= 1)
+        break
+    Sleep, 200
+} Until (A_Index > 50)   ; 최대 10초
+
+; 확장 프로토콜에 맞춘 CDP 명령 전송(예시 형식)
+WsServerSend("{""id"":1,""method"":""Page.navigate"",""params"":{""url"":""https://example.com""}}")
+
+; 응답 수신 + 파싱
+r := WsServerRecv(3000)
+if (r != "")
+    MsgBox, % "frameId=" JsonGet(r, "result.frameId")</pre>
+
+<div class="note">고수준 흐름(이동→제목/링크 추출→임의 JS 실행)을 WebGui UI 와 묶은 완성 예제는 <code>examples\02_CDP_웹제어</code> 에 있습니다.</div>
+
+<h2 id="related">관련</h2>
+<p><a href="WebGui.htm">WebGui</a>, <a href="DeepLearning.htm">딥러닝</a>, <a href="../index.htm">시작하기</a></p>
+
+<footer>AutoHotkey Web &mdash; CDP 서버 내장. 본인 브라우저 자동화 용도로 사용하세요. &middot; <span class="lic">GPLv2 · <a href="../index.htm#license">라이선스 · 배포 · 책임</a></span></footer>
+</body>
+</html>

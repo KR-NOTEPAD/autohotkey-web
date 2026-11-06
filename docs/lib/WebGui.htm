@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="WebGui 명령은 WebView2 기반 HTML/CSS/JS UI를 오토핫키 스크립트와 연결합니다.">
+<title>WebGui - 구문과 사용법 | AutoHotkey Web</title>
+<link rel="stylesheet" href="../static/theme.css">
+</head>
+<body>
+<div class="nav"><a href="../index.htm">AutoHotkey Web</a> &raquo; <a href="../index.htm#commands">명령</a> &raquo; WebGui</div>
+
+<h1>WebGui</h1>
+<p>HTML/CSS/JavaScript로 만든 UI를 <strong>WebView2</strong>로 창에 띄우고, OS 제어·매크로 로직을 담당하는 오토핫키 스크립트와 비동기 메시지 채널로 연결합니다. 하이브리드 데스크톱 앱의 프런트엔드(React·Vue 등)와 백엔드(AHK)를 잇는 브릿지입니다.</p>
+
+<pre class="Syntax"><span class="func">WebGui</span>, <span class="optional">Name:</span>SubCommand <span class="optional">, Param2, Param3, Param4</span></pre>
+
+<p><code>Name:</code>을 붙이면 이름 있는 창을 지정합니다. 생략하면 기본 창(<code>1</code>)을 사용합니다. 예: <code>WebGui, Main:Load, index.html</code>.</p>
+
+<div class="note"><strong>필요 조건:</strong> 대상 PC에 Microsoft Edge <strong>WebView2 런타임</strong>이 설치되어 있어야 합니다. Windows 10/11 대부분에 기본 포함(Evergreen)되어 있습니다.</div>
+
+<h2 id="subcommands">하위 명령</h2>
+
+<h3 id="New">New</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:New <span class="optional">, Options, Title</span></pre>
+<p>숨김 상태의 웹 창을 생성하고 WebView2를 비동기로 초기화합니다.</p>
+<dl>
+<dt>Options</dt><dd><code>wNNN</code> 너비, <code>hNNN</code> 높이, <code>-Resize</code> 크기 조절 비활성화.</dd>
+<dt>Title</dt><dd>창 제목 표시줄 텍스트.</dd>
+</dl>
+
+<h3 id="Load">Load</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:Load, UrlOrFile</pre>
+<p>페이지를 탐색합니다. <code>http(s)://</code> URL(예: Vite 개발 서버 <code>http://localhost:5173</code>)이나 로컬 <code>.html</code> 경로(자동으로 <code>file://</code>로 변환)를 받습니다. 코어가 아직 준비 전이면 준비 직후 자동 탐색합니다.</p>
+
+<h3 id="Show">Show</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:Show <span class="optional">, Options</span></pre>
+<p>창을 표시하고 포그라운드로 가져옵니다. Options에 <code>wNNN hNNN</code>로 크기 조정, <code>Maximize</code>로 최대화.</p>
+
+<h3 id="Hide">Hide</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:Hide</pre>
+<p>창을 파괴하지 않고 숨깁니다.</p>
+
+<h3 id="Expose">Expose</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:Expose, Method <span class="optional">, FuncName</span></pre>
+<p>JS 메서드를 AHK 함수에 연결합니다. 페이지에서 <code>await ahk.call(Method, obj)</code>를 호출하면, AHK 함수가 <code>obj</code>를 <strong>JSON 문자열</strong>로 받아 실행되고, 반환한 <strong>문자열</strong>이 JS의 Promise로 돌아갑니다. <code>FuncName</code> 생략 시 <code>Method</code>와 같은 이름의 함수를 사용합니다.</p>
+
+<h3 id="On">On</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:On, __Event, FuncName</pre>
+<p>생명주기/웹 이벤트를 AHK 함수에 연결합니다. <code>__Ready</code>(페이지가 <code>ahk.post("__Ready",...)</code> 호출 시), <code>__Close</code>(창 닫기 버튼) 등. 핸들러는 데이터를 JSON 문자열로 받습니다.</p>
+
+<h3 id="Emit">Emit</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:Emit, EventName <span class="optional">, Data</span></pre>
+<p>페이지의 <code>window.ahk.on(EventName)</code> 리스너를 호출합니다. <code>Data</code>는 문자열로 전달됩니다. AHK&rarr;JS 방향의 푸시.</p>
+
+<h3 id="Eval">Eval</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:Eval, JsCode</pre>
+<p>페이지에서 임의의 JavaScript를 실행합니다(결과 대기 없음). 반환값이 필요하면 아래 <a href="#WebGuiGet">WebGuiGet</a>을 쓰세요.</p>
+
+<h3 id="Html">Html</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:Html, HtmlString</pre>
+<p>HTML 문자열을 직접 로드합니다(WebView2 <code>NavigateToString</code>). 외부 <code>.html</code> 없이 <strong>한 파일로</strong> 앱을 만들 때 유용합니다. <code>window.ahk</code> 브릿지는 그대로 동작합니다. 오리진이 <code>about:blank</code>이므로 ES 모듈·fetch가 필요하면 <a href="#Mount">Mount</a>를 쓰세요. (우클릭 → 새로 만들기 → AutoHotkey Web Script 템플릿이 이 방식입니다.)</p>
+
+<h3 id="Mount">Mount</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:Mount, HostName, Folder <span class="optional">, AccessKind</span></pre>
+<p><code>https://HostName/</code>을 로컬 <code>Folder</code>에 매핑합니다. 이렇게 하면 페이지가 <code>file://</code>가 아니라 <strong>진짜 웹 오리진</strong>으로 로드되어 <strong>ES 모듈 import, fetch/XHR, 서비스 워커</strong>가 정상 동작합니다. 실제 SPA(React·Vue dist) 배포에 필수입니다. <code>AccessKind</code>: <code>CORS</code>(기본, 교차 출처 허용) 또는 <code>Deny</code>.</p>
+<div class="note">코어는 비동기로 생성되므로 <code>New</code> 직후 <code>Mount</code>를 호출하면 큐에 저장되었다가 <strong>첫 Load 직전에</strong> 자동 적용됩니다. 순서 걱정 없이 New→Mount→Load로 쓰면 됩니다.</div>
+
+<h3 id="DevTools">DevTools</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:DevTools</pre>
+<p>WebView2 개발자 도구 창을 엽니다(개발용). 릴리스 빌드에서는 기본 DevTools가 비활성이지만 이 명령으로 강제로 열 수 있습니다.</p>
+
+<h3 id="Destroy">Destroy</h3>
+<pre class="Syntax"><span class="func">WebGui</span>, Name:Destroy</pre>
+<p>창을 닫고 WebView2 리소스를 해제합니다.</p>
+
+<h2 id="bridge">브릿지 API (페이지 측 <code>window.ahk</code>)</h2>
+<p>모든 페이지에 자동 주입되는 <code>window.ahk</code> 객체:</p>
+<table class="info">
+<tr><th>메서드</th><th>설명</th></tr>
+<tr><td><code>ahk.call(method, params)</code></td><td>Promise 반환. <code>Expose</code>된 AHK 함수를 호출하고 반환 문자열로 resolve.</td></tr>
+<tr><td><code>ahk.post(method, params)</code></td><td>반환값 없이 이벤트 전송(예: <code>__Ready</code>). <code>On</code>으로 연결.</td></tr>
+<tr><td><code>ahk.on(event, cb)</code></td><td>AHK의 <code>Emit</code> 이벤트 수신.</td></tr>
+<tr><td><code>ahk.off(event, cb)</code></td><td>리스너 해제.</td></tr>
+</table>
+
+<h2 id="threading">스레드 모델</h2>
+<p>WebView2 콜백은 UI 스레드에서 인터프리터 <em>밖</em>으로 들어옵니다. AutoHotkey Web은 콜백에서 스크립트를 직접 실행하지 않고, 메시지를 큐에 넣은 뒤 메인 창에 <code>AHK_WEB_EVENT</code>를 보냅니다. 실제 핸들러 실행은 GUI/핫키 이벤트와 같은 지점(MsgSleep)에서 일어나므로, <code>Critical</code>·<code>#MaxThreadsPerHotkey</code>·<code>Thread</code> 우선순위가 그대로 적용됩니다.</p>
+
+<h2 id="examples">예제</h2>
+<p>간단한 계산기 브릿지. <code>index.html</code>에서 버튼을 누르면 AHK가 더해 돌려줍니다.</p>
+<pre>; app.ahk
+WebGui, Main:New, w720 h520, 내 앱
+WebGui, Main:Expose, Add
+WebGui, Main:On, __Ready, OnReady
+WebGui, Main:Load, %A_ScriptDir%\index.html
+WebGui, Main:Show
+return
+
+Add(params) {
+    a := JGet(params, "a"), b := JGet(params, "b")
+    return a + b          ; 문자열로 JS에 resolve
+}
+OnReady(params) {
+    ToolTip, 페이지 준비됨
+}
+MainWebGuiClose:   ; 창 닫기
+ExitApp</pre>
+
+<pre>&lt;!-- index.html --&gt;
+&lt;button id="go"&gt;3 + 4&lt;/button&gt;&lt;pre id="out"&gt;&lt;/pre&gt;
+&lt;script&gt;
+  document.getElementById('go').onclick = async () =&gt; {
+    const r = await ahk.call("Add", { a: 3, b: 4 });
+    document.getElementById('out').textContent = "= " + r;
+  };
+  ahk.post("__Ready", {});
+&lt;/script&gt;</pre>
+
+<div class="note"><strong>개발 모드:</strong> <code>WebGui, Main:Load, http://localhost:5173</code>로 Vite/webpack 개발 서버를 직접 띄우면 HMR을 그대로 쓸 수 있습니다. 배포 시 <code>Load</code>를 로컬 <code>dist\index.html</code>로 바꾸면 됩니다.</div>
+
+<h2 id="options">창 옵션 (New / Show)</h2>
+<p>stock Gui보다 웹 셸에 맞는 옵션을 지원합니다.</p>
+<table class="info">
+<tr><th>옵션</th><th>설명</th></tr>
+<tr><td><code>wNNN hNNN</code></td><td>크기.</td></tr>
+<tr><td><code>xNNN yNNN</code></td><td>위치. 생략 시 작업 영역 중앙.</td></tr>
+<tr><td><code>Center</code></td><td>중앙 정렬.</td></tr>
+<tr><td><code>-Resize</code></td><td>크기 고정(두꺼운 테두리·최대화 제거).</td></tr>
+<tr><td><code>Frameless</code></td><td>테두리 없는 팝업. 타이틀바를 HTML로 직접 그릴 때.</td></tr>
+<tr><td><code>AlwaysOnTop</code></td><td>항상 위.</td></tr>
+<tr><td><code>NoActivate</code></td><td>표시 시 포커스를 뺏지 않음.</td></tr>
+<tr><td><code>OpacityNNN</code></td><td>0–255 창 투명도(레이어드 윈도우).</td></tr>
+</table>
+<p>예: <code>WebGui, Main:New, w1000 h700 Center AlwaysOnTop Opacity240, 대시보드</code></p>
+
+<h2 id="WebGuiGet">WebGuiGet — 페이지에서 값 가져오기</h2>
+<pre class="Syntax"><span class="func">WebGuiGet</span>, OutputVar, Name:SubCommand <span class="optional">, Param3</span></pre>
+<p><code>WebGui</code>가 AHK&rarr;웹 방향이라면, <code>WebGuiGet</code>은 웹&rarr;AHK로 값을 <strong>동기적으로</strong> 끌어옵니다(<code>GuiControlGet</code>과 같은 형태, OutputVar가 첫 인자).</p>
+<dl>
+<dt>Eval, JsCode</dt><dd>JS를 실행해 그 결과(JSON)를 OutputVar에 저장합니다. 메시지를 펌핑하며 결과를 기다리고(최대 5초), JSON 문자열은 따옴표를 벗겨 일반 문자열로, 그 외 JSON은 원형으로 반환합니다. 예: <code>WebGuiGet, title, Main:Eval, document.title</code></dd>
+<dt>Hwnd</dt><dd>웹 창의 핸들을 OutputVar에 저장합니다. stock <code>WinMove</code>·<code>WinSet</code> 등으로 웹 창을 제어할 수 있습니다.</dd>
+</dl>
+
+<h2 id="bundle">단일 EXE 자산 번들링</h2>
+<p>스크립트 어딘가에 디렉티브를 넣으면, <a href="../index.htm#start">AhkWeb2Exe</a> 컴파일 시 해당 폴더(React/Vue <code>dist</code> 등)를 EXE 안에 zip으로 내장합니다.</p>
+<pre>;@AhkWeb-Assets dist</pre>
+<p>실행 시 엔진이 자동으로 임시 폴더에 추출하고, 그 경로를 <code>A_AhkWebAssets</code>에 넣어줍니다. 아래 한 패턴으로 <strong>개발(소스)과 배포(단일 EXE)가 동일하게</strong> 동작합니다.</p>
+<pre>assets := A_AhkWebAssets ? A_AhkWebAssets : A_ScriptDir "\dist"
+WebGui, Main:New, w1000 h700 Center
+WebGui, Main:Mount, app.ahkweb, %assets%
+WebGui, Main:Load, https://app.ahkweb/index.html
+WebGui, Main:Show</pre>
+<p>컴파일하면 <strong>엔진 + 스크립트 + 웹 자산이 EXE 하나</strong>로 묶여, 외부 파일 없이 어디서나 실행됩니다.</p>
+
+<h2 id="related">관련</h2>
+
+<footer>AutoHotkey Web &mdash; AutoHotkey v1.1의 GPLv2 포크. 문법은 v1과 동일합니다. &middot; <span class="lic">GPLv2 · <a href="../index.htm#license">라이선스 · 배포 · 책임</a></span></footer>
+</body>
+</html>

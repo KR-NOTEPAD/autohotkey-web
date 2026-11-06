@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="문자열·배열·객체 메소드 체이닝과 JSON 변환 내장 기능.">
+<title>메소드 체이닝 / JSON | AutoHotkey Web</title>
+<link rel="stylesheet" href="../static/theme.css">
+</head>
+<body>
+<div class="nav"><a href="../index.htm">AutoHotkey Web</a> &raquo; <a href="../index.htm#commands">함수</a> &raquo; 메소드 체이닝</div>
+
+<h1>메소드 체이닝 / JSON</h1>
+<p>문자열·배열·객체에 메소드를 이어 붙여 쓸 수 있습니다. <code>#Include</code>나 래퍼 클래스 없이, 모든 값에 바로 동작합니다. 문법은 v1 그대로입니다.</p>
+<pre>"  hello world ".Trim().Title().Replace("World", "AHK")   ; "Hello AHK"
+"a,b,,c".Split(",").Compact().Join("|")                 ; "a|b|c"
+[3, 1, 2].Sort("N").Reverse().Join("-")                 ; "3-2-1"
+staff.Where("dept", "개발").SortBy("age").Pluck("name").Join(", ")
+cfg := FileText.JsonParse(), cfg.Get("app.window.w")</pre>
+
+<div class="note"><strong>우선순위(기존 스크립트 보호):</strong> 객체의 키, 클래스 메소드, base 객체, stock 내장 메소드(<code>Length/Push/Count…</code>)가 먼저 처리되고, 그 다음에야 아래 메소드가 동작합니다. 문자열도 <code>"".base.Trim := Func("My")</code>처럼 스크립트가 정의한 확장이 있으면 그것이 우선합니다.</div>
+<div class="note">v1 파서 제약: <code>{a:1}.Keys()</code>처럼 <strong>객체 리터럴 바로 뒤</strong>에는 메소드를 붙일 수 없습니다(변수에 담은 뒤 호출). 배열 리터럴 <code>[1,2].Join()</code>과 문자열 리터럴은 됩니다. 또 <code>"" [1,2]</code>처럼 값 뒤에 공백+<code>[</code>가 오면 인덱싱으로 해석되니 변수를 쓰세요.</div>
+
+<h2 id="string">문자열 메소드</h2>
+<table class="info">
+<tr><th>메소드</th><th>설명</th></tr>
+<tr><td><code>Length</code> / <code>Length()</code> / <code>Len()</code></td><td>글자 수 (괄호 없이도 됨)</td></tr>
+<tr><td><code>Trim([chars]) LTrim RTrim</code></td><td>stock Trim 과 동일</td></tr>
+<tr><td><code>Upper() Lower() Title()</code></td><td>대소문자 변환</td></tr>
+<tr><td><code>Sub(start [, len])</code> / <code>SubStr</code>, <code>Left(n)</code>, <code>Right(n)</code></td><td>부분 문자열</td></tr>
+<tr><td><code>Find/IndexOf/InStr(needle …)</code></td><td>위치 (InStr 인자 그대로)</td></tr>
+<tr><td><code>Contains(x [, cs]) StartsWith EndsWith Equals</code></td><td>1/0</td></tr>
+<tr><td><code>Replace(a, b …)</code>, <code>RegExReplace(pat, rep …)</code>, <code>RegExMatch(pat …)</code></td><td>stock 함수와 같은 인자</td></tr>
+<tr><td><code>Split(delims [, omit])</code>, <code>Lines()</code>, <code>Chars()</code></td><td>배열 반환 → 배열 메소드로 이어짐</td></tr>
+<tr><td><code>Format(args*)</code></td><td><code>"{1}-{2}".Format(a, b)</code></td></tr>
+<tr><td><code>Repeat(n) Reverse() PadLeft(w [, ch]) PadRight Count(sub)</code></td><td>반복·뒤집기·채우기·개수</td></tr>
+<tr><td><code>Chosung() HalfWidth() Slug()</code></td><td>한글 초성, 전각→반각, URL 슬러그</td></tr>
+<tr><td><code>IsEmpty() IsNumber() IsInteger() ToNumber()</code></td><td>검사·변환</td></tr>
+<tr><td><code>Concat(x*) Wrap(l [, r]) Quote()</code></td><td>붙이기, 감싸기, JSON 문자열화</td></tr>
+<tr><td><code>Base64() Base64Decode() Hex() HexDecode() UrlEncode() UrlDecode() HtmlEncode() HtmlDecode()</code></td><td>인코딩</td></tr>
+<tr><td><code>SHA256() SHA1() SHA512() MD5() CRC32() HMAC(key)</code></td><td>해시</td></tr>
+<tr><td><code>Encrypt(pw) Decrypt(pw) Compress() Decompress()</code></td><td>AES-256-GCM / DEFLATE</td></tr>
+<tr><td><code>JsonParse() JsonGet(path) JsonPretty() JsonValid()</code></td><td>JSON</td></tr>
+<tr><td><code>Similarity(b) Levenshtein(b) JaroWinkler(b)</code></td><td>유사도</td></tr>
+</table>
+
+<h2 id="array">배열 / 객체 메소드</h2>
+<p>콜백은 함수 이름 문자열, <code>Func</code> 객체, BoundFunc 모두 됩니다. 콜백에는 <code>(값, 키, 배열)</code>이 전달되며, <strong>선언한 매개변수 개수만큼만</strong> 넘어갑니다. "새 배열"이라고 쓴 메소드는 원본을 바꾸지 않습니다.</p>
+<table class="info">
+<tr><th>종류</th><th>메소드</th></tr>
+<tr><td>새 배열</td><td><code>Sort([opts]) SortBy(prop [, opts]) Reverse() Shuffle() Unique([prop]) Slice([start, stop]) Chunk([n]) Flatten([depth]) Map(fn) Filter(fn) Pluck(prop) Where(prop [, value, op]) Top([n, prop, desc]) Compact([zeroToo]) Diff(o) Intersect(o) Union(o*) Keys() Values() Pick(keys*) Omit(keys*) Copy([deep]) concat(a*)</code></td></tr>
+<tr><td>값 반환</td><td><code>Reduce(fn [, init]) Find(fn [, default]) FindKey(fn) findIndex(fn) Any(fn) All(fn) CountIf(fn) Has(v) IndexOf(v) KeyOf(v) First() Last() at(i) Len() IsEmpty() IsLinear() Get(path [, default]) HasPath(path)</code></td></tr>
+<tr><td>집계</td><td><code>Sum([prop]) Min Max Avg Median Stdev([prop, sample])</code></td></tr>
+<tr><td>this 반환(제자리)</td><td><code>Each(fn) Set(path, value) Append(v*) Prepend(v*) Clear()</code></td></tr>
+<tr><td>문자열화</td><td><code>Join([sep, kvSep]) ToJson([pretty]) ToLines() ToQuery()</code></td></tr>
+<tr><td>JS 별칭</td><td><code>includes some every forEach findIndex flat concat at unshift toSorted toReversed toString</code></td></tr>
+</table>
+<p><strong>Sort 옵션:</strong> 문자열 <code>"N"</code>(숫자) <code>"D"</code>(내림) <code>"C"</code>(대소문자 구분) <code>"NAT"</code>(자연 정렬, a2&lt;a10), 비교 함수 <code>fn(a, b)</code>, 또는 객체 <code>{by:"age", desc:true, numeric:true, natural:true, cs:true, fn:Func("…")}</code>.</p>
+<p><strong>Where 연산자:</strong> <code>= == != &lt;&gt; &gt; &gt;= &lt; &lt;= contains startswith</code>. <strong>Slice</strong>는 1부터, 끝 포함, 음수는 뒤에서부터(<code>Slice(-2)</code> = 마지막 2개).</p>
+
+<h2 id="json">JsonParse / JsonStringify</h2>
+<pre class="Syntax">Obj  := <span class="func">JsonParse</span>(JsonText)
+Text := <span class="func">JsonStringify</span>(Value [, Indent])</pre>
+<ul>
+<li>배열은 1부터 시작하는 AHK 배열, <code>true/false</code>→<code>1/0</code>, <code>null</code>→빈 문자열, 소수는 숫자 문자열(<code>"1.5"</code>)로 보관해 표시가 깨지지 않습니다.</li>
+<li><code>Indent</code>: 칸 수(예: 2) 또는 문자열(예: <code>"`t"</code>). 생략하면 한 줄.</li>
+<li>키가 1..n 으로 연속인 객체는 JSON 배열, 그 외는 JSON 객체. 정확한 JSON 숫자 모양의 문자열(<code>1.5</code>, <code>-3</code>)은 숫자로, <code>"007"</code>·<code>"0x10"</code>은 문자열로 씁니다.</li>
+<li>v1 객체의 키 순서는 정수 → 문자열(알파벳순)입니다.</li>
+</ul>
+
+<h2 id="example">예제</h2>
+<pre>people := [{name: "Kim", age: 30}, {name: "Lee", age: 20}, {name: "Park", age: 40}]
+MsgBox % people.SortBy("age").Pluck("name").Join(" → ")     ; Lee → Kim → Park
+MsgBox % people.Where("age", 25, "&gt;").ToJson(false)
+cfg := {}
+cfg.Set("window.size.w", 800).Set("theme", "dark")
+FileAppend, % JsonStringify(cfg, 2), config.json</pre>
+<p>전체 예제: <code>examples\06_메소드체이닝\demo.ahk</code></p>
+
+<h2 id="related">관련</h2>
+<p><a href="Toolkit.htm">툴킷 함수</a>, <a href="Crypto.htm">암호화</a>, <a href="../index.htm">시작하기</a></p>
+<footer>AutoHotkey Web &middot; 메소드 체이닝 &middot; <span class="lic">GPLv2 · <a href="../index.htm#license">라이선스 · 배포 · 책임</a></span></footer>
+</body>
+</html>

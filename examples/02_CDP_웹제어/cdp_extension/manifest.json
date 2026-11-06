@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "AHK CDP Bridge",
+  "version": "1.0.0",
+  "description": "AutoHotkey <-> Chrome DevTools Protocol bridge. Connects to ws://127.0.0.1:19222 (WsServer) and relays tab / debugger / scripting commands.",
+  "permissions": [
+    "debugger",
+    "tabs",
+    "scripting",
+    "storage",
+    "alarms",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "action": {
+    "default_title": "AHK CDP Bridge",
+    "default_popup": "options.html"
+  },
+  "minimum_chrome_version": "116"
+}

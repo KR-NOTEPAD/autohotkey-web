@@ -1,0 +1,121 @@
+﻿; ============================================================================
+;  AutoHotkey Web 예제 5-2 - 파일 금고 (AES-256-GCM + SHA-256 무결성 + JSON 목록)
+;  폴더의 파일을 비밀번호로 암호화해 *.vault 로 만들고, 풀 때는 SHA-256 으로
+;  원본과 똑같이 복원됐는지 확인합니다. 원본은 지우지 않고 '휴지통'으로 보냅니다.
+;
+;  사용 함수(엔진 내장): EncryptFile / DecryptFile / SHA256File / FileRecycle /
+;                        JsonStringify / JsonParse / 배열 메소드 체이닝
+;  실행: AutoHotkeyWeb.exe file_vault.ahk
+; ============================================================================
+#NoEnv
+#SingleInstance Force
+FileEncoding, UTF-8
+
+Gui, Font, s10, 맑은 고딕
+Gui, Add, Text,, 대상 폴더
+Gui, Add, Edit, x10 y+4 w440 vDir, %A_Desktop%\금고테스트
+Gui, Add, Button, x+6 w70 gBrowse, 찾기...
+Gui, Add, Text, x10 y+12, 비밀번호
+Gui, Add, Edit, x10 y+4 w200 vPw Password
+Gui, Add, CheckBox, x+16 yp+4 vRecycle Checked, 잠근 뒤 원본을 휴지통으로
+Gui, Add, Button, x10 y+14 w120 gLock, 🔒 잠그기
+Gui, Add, Button, x+8 w120 gUnlock, 🔓 풀기
+Gui, Add, Button, x+8 w140 gMakeSample, 테스트 폴더 만들기
+Gui, Add, ListView, x10 y+12 w520 h260 vLog, 파일|결과|SHA-256
+Gui, Show,, AutoHotkey Web - 파일 금고
+return
+
+Browse:
+    FileSelectFolder, d, , 3, 금고로 쓸 폴더를 고르세요
+    if (d != "")
+        GuiControl,, Dir, %d%
+return
+
+MakeSample:
+    Gui, Submit, NoHide
+    FileCreateDir, %Dir%
+    FileDelete, %Dir%\메모.txt
+    FileAppend, 금고 테스트용 메모입니다.`n두 번째 줄, %Dir%\메모.txt
+    QrEncode("AutoHotkey Web 금고", Dir "\qr.png")
+    LV_Add("", Dir, "테스트 파일 2개 생성", "")
+return
+
+Lock:
+    Gui, Submit, NoHide
+    if (!CheckInput())
+        return
+    manifest := {}
+    files := ListFiles(Dir, false)
+    if (files.IsEmpty()) {                          ; 배열 메소드
+        LV_Add("", Dir, "잠글 파일 없음", "")
+        return
+    }
+    for i, f in files {
+        hash := SHA256File(f)
+        ok := EncryptFile(f, f ".vault", Pw)        ; 반복 100,000 PBKDF2 → AES-256-GCM
+        SplitPath, f, name
+        if (ok) {
+            manifest[name] := hash
+            if (Recycle)
+                FileRecycle(f)                       ; 영구 삭제가 아니라 휴지통
+        }
+        LV_Add("", name, ok ? "잠금" : "실패", SubStr(hash, 1, 16) "…")
+    }
+    ; 목록은 JSON 으로 저장 (해시만 저장, 비밀번호는 저장하지 않음)
+    FileDelete, %Dir%\vault.json
+    FileAppend, % JsonStringify(manifest, 2), %Dir%\vault.json
+    LV_ModifyCol()
+return
+
+Unlock:
+    Gui, Submit, NoHide
+    if (!CheckInput())
+        return
+    FileRead, js, %Dir%\vault.json
+    manifest := js.JsonParse()                      ; 문자열 → 객체
+    if (!IsObject(manifest))
+        manifest := {}
+    for i, f in ListFiles(Dir, true) {
+        out := SubStr(f, 1, -6)                      ; ".vault" 제거
+        SplitPath, out, name
+        if (!DecryptFile(f, out, Pw)) {
+            LV_Add("", name, "실패 (비밀번호 틀림 또는 변조)", "")
+            continue
+        }
+        hash := SHA256File(out)
+        verdict := !manifest.HasKey(name) ? "복원 (목록 없음)" : manifest[name] = hash ? "복원 · 무결성 OK" : "해시 불일치!"
+        if (manifest[name] = hash)
+            FileDelete, %f%
+        LV_Add("", name, verdict, SubStr(hash, 1, 16) "…")
+    }
+    LV_ModifyCol()
+return
+
+CheckInput() {
+    global Dir, Pw
+    if !InStr(FileExist(Dir), "D") {
+        MsgBox, 48, 금고, 폴더가 없습니다. '테스트 폴더 만들기'를 눌러 보세요.
+        return false
+    }
+    if (StrLen(Pw) < 4) {
+        MsgBox, 48, 금고, 비밀번호를 4자 이상 입력하세요.
+        return false
+    }
+    return true
+}
+
+; 폴더의 파일 목록 (vault=true 면 *.vault 만, false 면 그 외 파일)
+ListFiles(dir, vault) {
+    list := []
+    Loop, Files, %dir%\*.*
+    {
+        isVault := A_LoopFileExt = "vault"
+        if (A_LoopFileName = "vault.json" || isVault != vault)
+            continue
+        list.Push(A_LoopFileFullPath)
+    }
+    return list.Sort()                               ; 이름순 새 배열
+}
+
+GuiClose:
+ExitApp

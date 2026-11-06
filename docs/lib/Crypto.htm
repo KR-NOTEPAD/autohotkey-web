@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="해시, HMAC, AES-256-GCM, 비밀번호 해시, DPAPI, ECDSA 전자서명, 보안 난수 내장 함수.">
+<title>암호화 | AutoHotkey Web</title>
+<link rel="stylesheet" href="../static/theme.css">
+</head>
+<body>
+<div class="nav"><a href="../index.htm">AutoHotkey Web</a> &raquo; <a href="../index.htm#commands">함수</a> &raquo; 암호화</div>
+
+<h1>암호화 · 해시 · 서명</h1>
+<p>Windows CNG(BCrypt) 기반 암호 기능을 엔진에 내장했습니다. 문자열은 내부에서 UTF-8로 처리되어 한글이 그대로 왕복하며, 바이너리 결과는 Base64 또는 hex 문자열로 주고받습니다.</p>
+
+<h2 id="hash">해시 / 체크섬</h2>
+<table class="info">
+<tr><th>함수</th><th>반환</th></tr>
+<tr><td><code>SHA256(text) SHA1 SHA384 SHA512 MD5</code></td><td>소문자 hex</td></tr>
+<tr><td><code>HMAC(text, key)</code> / <code>HMAC512(text, key)</code></td><td>HMAC-SHA256 / SHA512 hex</td></tr>
+<tr><td><code>CRC32(text) Adler32 Fnv1a</code></td><td>체크섬 hex</td></tr>
+<tr><td><code>SHA256File(path) CRC32File(path)</code></td><td>파일 해시</td></tr>
+<tr><td><code>VerifyFileHash(path, hex)</code></td><td>일치 1 / 불일치 0</td></tr>
+</table>
+
+<h2 id="aes">AES-256-GCM 암호화 (비밀번호 기반)</h2>
+<pre class="Syntax">Token := <span class="func">EncryptPassword</span>(PlainText, Password [, Iterations := 100000])
+Plain := <span class="func">DecryptPassword</span>(Token, Password)
+OK    := <span class="func">EncryptFile</span>(InPath, OutPath, Password [, Iterations := 100000])
+OK    := <span class="func">DecryptFile</span>(InPath, OutPath, Password)</pre>
+<p>PBKDF2-SHA256으로 32바이트 키를 만들고 AES-256-GCM으로 암호화합니다. 솔트(16B)와 nonce(12B)는 매번 새로 생성되며, 토큰은 <code>v1:salt:nonce:tag:cipher</code> 형식입니다. 비밀번호가 틀리거나 한 바이트라도 변조되면 <code>DecryptPassword</code>는 빈 문자열, <code>DecryptFile</code>은 0을 반환합니다(인증 태그 검증).</p>
+
+<h2 id="password">비밀번호 저장</h2>
+<pre class="Syntax">Hash := <span class="func">HashPassword</span>(Password [, Iterations := 100000])   ; "pbkdf2$iter$salt$hash"
+OK   := <span class="func">VerifyPassword</span>(Password, Hash)</pre>
+<p>로그인 비밀번호처럼 "맞는지 확인만" 하면 되는 값은 암호화하지 말고 이 해시만 저장하세요.</p>
+
+<h2 id="dpapi">DPAPI</h2>
+<pre class="Syntax">B64  := <span class="func">DpapiProtect</span>(Text [, Entropy, MachineScope := false])
+Text := <span class="func">DpapiUnprotect</span>(B64 [, Entropy])</pre>
+<p>비밀번호 없이 <strong>현재 Windows 사용자</strong>(MachineScope=true면 이 PC)만 풀 수 있게 보호합니다. API 키·토큰을 설정 파일에 저장할 때 유용합니다.</p>
+
+<h2 id="ecdsa">ECDSA P-256 전자서명</h2>
+<pre class="Syntax">Pair := <span class="func">EcdsaKeyPair</span>()                 ; "개인키B64:공개키B64"
+Sig  := <span class="func">EcdsaSign</span>(Text, PrivateKeyB64)
+OK   := <span class="func">EcdsaVerify</span>(Text, SigB64, PublicKeyB64)</pre>
+<p>개인키는 비밀로 보관하고 공개키만 배포합니다. 내용이 바뀌면 <code>EcdsaVerify</code>가 0을 반환합니다(업데이트 파일·라이선스 검증 등).</p>
+
+<h2 id="encode">인코딩 / 난수</h2>
+<table class="info">
+<tr><td><code>Base64Encode(text) Base64Decode(b64) Base64UrlEncode Base64UrlDecode HexEncode HexDecode</code></td><td>UTF-8 기준 인코딩</td></tr>
+<tr><td><code>RandomBase64([bytes := 32]) RandInt(lo, hi) UUID()</code></td><td>암호학적으로 안전한 난수</td></tr>
+<tr><td><code>StrEntropy(text)</code>, <code>LuhnCheck(number)</code></td><td>섀넌 엔트로피×1000, 카드번호 체크</td></tr>
+</table>
+<p>문자열 메소드로도 쓸 수 있습니다: <code>pw.SHA256()</code>, <code>memo.Encrypt("pw").Decrypt("pw")</code>, <code>txt.Base64()</code>.</p>
+
+<h2 id="example">예제</h2>
+<pre>token := EncryptPassword("계좌 메모", pw)
+FileAppend, %token%, memo.enc
+FileRead, t, memo.enc
+MsgBox % DecryptPassword(t, pw)
+
+kp := StrSplit(EcdsaKeyPair(), ":")
+sig := EcdsaSign("release-1.2.zip:" SHA256File("release-1.2.zip"), kp[1])</pre>
+<p>전체 예제: <code>examples\05_암호화\crypto_basics.ahk</code>, <code>file_vault.ahk</code>(폴더 금고 + SHA-256 무결성 + JSON 목록)</p>
+<div class="note">비밀번호를 스크립트에 하드코딩하지 마세요. 꼭 저장해야 하면 <code>DpapiProtect</code>로 감싸 두는 것을 권장합니다.</div>
+
+<h2 id="related">관련</h2>
+<p><a href="Toolkit.htm">툴킷 함수</a>, <a href="Chaining.htm">메소드 체이닝</a></p>
+<footer>AutoHotkey Web &middot; 암호화 &middot; <span class="lic">GPLv2 · <a href="../index.htm#license">라이선스 · 배포 · 책임</a></span></footer>
+</body>
+</html>

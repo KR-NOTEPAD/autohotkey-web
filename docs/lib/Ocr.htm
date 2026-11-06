@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="딥러닝 한글 OCR(PaddleOCR ONNX)과 Windows 내장 OCR 함수.">
+<title>한글 OCR | AutoHotkey Web</title>
+<link rel="stylesheet" href="../static/theme.css">
+</head>
+<body>
+<div class="nav"><a href="../index.htm">AutoHotkey Web</a> &raquo; <a href="../index.htm#commands">함수</a> &raquo; OCR</div>
+
+<h1>한글 OCR (AI + Windows)</h1>
+<p>두 가지 OCR 엔진이 내장되어 있습니다.</p>
+<table class="info">
+<tr><th>엔진</th><th>함수</th><th>특징</th></tr>
+<tr><td><strong>AI OCR</strong> (권장)</td><td><code>OcrImageAI OcrScreenAI OcrAIError</code></td><td>PaddleOCR(PP-OCRv5) ONNX. 한글·영문·숫자·기호 혼합, 차대번호·세로글씨 옵션. <code>onnxruntime.dll</code> + <code>models\ocr</code> 필요.</td></tr>
+<tr><td><strong>Windows OCR</strong></td><td><code>OcrImage OcrScreen OcrLanguages</code></td><td>모델 없이 OS 언어팩 사용. 가볍고 빠름.</td></tr>
+</table>
+
+<h2 id="ai">OcrImageAI / OcrScreenAI</h2>
+<pre class="Syntax">Text := <span class="func">OcrImageAI</span>(ImagePath [, ModelDir, Opts])
+Text := <span class="func">OcrScreenAI</span>(X, Y, W, H [, ModelDir, Opts])
+Err  := <span class="func">OcrAIError</span>()</pre>
+<dl>
+<dt>ModelDir</dt><dd>비우면 엔진 폴더의 <code>models\ocr\</code>(det.onnx, rec_korean_v5.onnx, korean_dict_v5.txt, cls.onnx).</dd>
+<dt>Opts</dt><dd>공백으로 구분, 조합 가능:
+<ul>
+<li><code>enhance</code> 인식 전 화질 향상(작은 글자·흐림), <code>scale=300</code> 확대 %</li>
+<li><code>cls</code> 180° 뒤집힌 글자 보정, <code>rot=auto</code> 세로 글자 자동 회전(<code>rot=90|180|270</code> 고정)</li>
+<li><code>vin</code> 차대번호 전용(0-9·A-Z, I/O/Q 제외), <code>digits</code> <code>alnum</code> <code>upper</code> <code>allow=0-9A-Z</code> 허용 문자</li>
+<li><code>data</code> 줄마다 <code>x,y,w,h,score&lt;TAB&gt;텍스트</code> 좌표·점수 포함</li>
+<li><code>denoise</code> 카메라 사진 노이즈 제거, <code>sr</code> 딥러닝 초해상도(<code>models\realesrgan_x4.onnx</code> 필요, 느림)</li>
+</ul></dd>
+</dl>
+<p><strong>반환:</strong> 인식 텍스트(줄바꿈 구분). 실패 시 빈 문자열 → <code>OcrAIError()</code>로 원인 확인. 첫 호출은 모델 로드로 1~3초, 이후는 캐시됩니다. 화면 OCR은 임시 파일 없이 메모리로 캡처합니다.</p>
+
+<h2 id="win">OcrImage / OcrScreen / OcrLanguages</h2>
+<pre class="Syntax">Text  := <span class="func">OcrImage</span>(ImagePath [, Lang])
+Text  := <span class="func">OcrScreen</span>(X, Y, W, H [, Lang])
+Langs := <span class="func">OcrLanguages</span>()        ; 예: "ko en-US"</pre>
+<p><code>Lang</code>을 비우면 사용자 언어 프로필을 따릅니다. 한국어 OCR 언어팩이 없으면 <code>OcrLanguages()</code>에 <code>ko</code>가 없습니다(설정 → 시간 및 언어 → 언어에서 한국어 추가).</p>
+
+<h2 id="tips">함께 쓰면 좋은 함수</h2>
+<ul>
+<li><code>SelectRegion()</code> 마우스로 영역 드래그 → <code>"x,y,w,h"</code></li>
+<li><code>ClipboardImageToPng(path)</code> Win+Shift+S 캡처를 바로 OCR</li>
+<li><code>ImageEnhance(in, out [, scalePct, opts])</code> 전처리만 따로</li>
+</ul>
+
+<h2 id="example">예제</h2>
+<pre>r := StrSplit(SelectRegion(), ",")
+if (r.Length() = 4)
+    MsgBox % OcrScreenAI(r[1], r[2], r[3], r[4], "", "enhance")
+
+vin := OcrImageAI("car.jpg", "", "enhance vin")
+lines := OcrImageAI("doc.png").Lines().Compact()      ; 체이닝으로 줄 배열</pre>
+<p>전체 예제: <code>examples\04_AI_한글OCR\app.ahk</code> (이미지·화면 영역·클립보드, 두 엔진 비교)</p>
+
+<h2 id="related">관련</h2>
+<p><a href="Toolkit.htm#image">이미지·화면 함수</a>, <a href="DeepLearning.htm">딥러닝</a></p>
+<footer>AutoHotkey Web &middot; OCR &middot; <span class="lic">GPLv2 · <a href="../index.htm#license">라이선스 · 배포 · 책임</a></span></footer>
+</body>
+</html>

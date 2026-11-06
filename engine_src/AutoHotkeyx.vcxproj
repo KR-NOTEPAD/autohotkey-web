@@ -1,0 +1,440 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MODIFIED 2026-11 by AutoHotkey Web contributors (fork of AutoHotkey v1.1.37.02). See CHANGELOG.md. -->
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ProjectGuid>{76EFDEE3-81CF-4ADA-94DC-EA5509FF6FFC}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType Condition="$(Configuration.Contains('.dll'))">DynamicLibrary</ConfigurationType>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug(mbcs)|Win32">
+      <Configuration>Debug(mbcs)</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug(mbcs)|x64">
+      <Configuration>Debug(mbcs)</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug.dll|Win32">
+      <Configuration>Debug.dll</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug.dll|x64">
+      <Configuration>Debug.dll</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release(mbcs)|Win32">
+      <Configuration>Release(mbcs)</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release(mbcs)|x64">
+      <Configuration>Release(mbcs)</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release.dll|Win32">
+      <Configuration>Release.dll</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release.dll|x64">
+      <Configuration>Release.dll</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Self-contained|Win32">
+      <Configuration>Self-contained</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Self-contained|x64">
+      <Configuration>Self-contained</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Self-contained(debug)|Win32">
+      <Configuration>Self-contained(debug)</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Self-contained(debug)|x64">
+      <Configuration>Self-contained(debug)</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Self-contained(mbcs)|Win32">
+      <Configuration>Self-contained(mbcs)</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Self-contained(mbcs)|x64">
+      <Configuration>Self-contained(mbcs)</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <!-- import common config -->
+  <Import Project="Config.vcxproj" />
+  <!-- platform: win32 & x64 (common) -->
+  <ItemDefinitionGroup Condition="'$(Platform)'=='Win32' OR '$(Platform)'=='x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>wsock32.lib;winmm.lib;version.lib;comctl32.lib;psapi.lib;wininet.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <StackReserveSize>4194304</StackReserveSize>
+      <TerminalServerAware Condition="!$(ConfigDll)">false</TerminalServerAware>
+      <DataExecutionPrevention>false</DataExecutionPrevention>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <ProgramDatabaseFile Condition="$(ConfigDll)">$(OutDir)\$(TargetName)_dll.pdb</ProgramDatabaseFile>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- platform: win32 -->
+  <ItemDefinitionGroup Condition="'$(Platform)'=='Win32'">
+    <Link>
+      <TargetMachine>MachineX86</TargetMachine>
+      <MinimumRequiredVersion>5.01</MinimumRequiredVersion>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- AutoHotkey Web: ONNX Runtime is OPTIONAL. Default on; build without the ORT SDK via
+       /p:EnableOnnx=false (deep-learning TextCls/TextNN + AI OCR then compile as stubs that
+       return empty at runtime; everything else is unaffected). Lets the engine build from a
+       source-only checkout that has WebView2 but not the ONNX SDK. -->
+  <PropertyGroup>
+    <EnableOnnx Condition="'$(EnableOnnx)'==''">true</EnableOnnx>
+  </PropertyGroup>
+  <!-- platform: x64 (ONNX enabled) -->
+  <ItemDefinitionGroup Condition="'$(Platform)'=='x64' and '$(EnableOnnx)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>_WIN64;NOTEPAD_ENABLE_ONNX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <!-- AutoHotkey Web: WebView2 + ONNX Runtime SDK headers -->
+      <AdditionalIncludeDirectories>$(ProjectDir)..\third_party\webview2\build\native\include;$(ProjectDir)..\third_party\onnxruntime\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+    <Link>
+      <TargetMachine>MachineX64</TargetMachine>
+      <!-- AutoHotkey Web: static WebView2 loader + bcrypt + ONNX Runtime (delay-loaded, DL) -->
+      <AdditionalDependencies>$(ProjectDir)..\third_party\webview2\build\native\x64\WebView2LoaderStatic.lib;$(ProjectDir)..\third_party\onnxruntime\lib\onnxruntime.lib;delayimp.lib;bcrypt.lib;crypt32.lib;gdiplus.lib;ole32.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>onnxruntime.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- platform: x64 (ONNX disabled: no ORT SDK needed) -->
+  <ItemDefinitionGroup Condition="'$(Platform)'=='x64' and '$(EnableOnnx)'!='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>_WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\third_party\webview2\build\native\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+    <Link>
+      <TargetMachine>MachineX64</TargetMachine>
+      <AdditionalDependencies>$(ProjectDir)..\third_party\webview2\build\native\x64\WebView2LoaderStatic.lib;bcrypt.lib;crypt32.lib;gdiplus.lib;ole32.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- paths and basic settings -->
+  <PropertyGroup>
+    <IntDir>temp\$(Platform)\$(Configuration)\</IntDir>
+    <BinDir>bin</BinDir>
+    <OutDir>$(BinDir)\</OutDir>
+    <OutDir Condition="$(ConfigDebug)">$(BinDir)_debug\</OutDir>
+    <OutDir Condition="$(ConfigMinSize)">$(BinDir)_minimal\</OutDir>
+    <BinSuffixChar Condition="'$(CharacterSet)'=='Unicode'">U</BinSuffixChar>
+    <BinSuffixChar Condition="'$(CharacterSet)'=='MultiByte'">A</BinSuffixChar>
+    <BinTypeWord>$(CharacterSet)</BinTypeWord>
+    <BinTypeWord Condition="'$(CharacterSet)'=='MultiByte'">ANSI</BinTypeWord>
+    <BinSuffixBits Condition="'$(Platform)'=='Win32'">32</BinSuffixBits>
+    <BinSuffixBits Condition="'$(Platform)'=='x64'">64</BinSuffixBits>
+    <TargetName>AutoHotkey$(BinSuffixChar)$(BinSuffixBits)</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PrecompiledHeader Condition="!$(ConfigDebug)">Use</PrecompiledHeader>
+    </ClCompile>
+    <Link>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Link>
+    <Manifest>
+      <AdditionalManifestFiles>source\resources\AutoHotkey.exe.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <!-- AutoHotkey.dll -->
+  <ItemDefinitionGroup Condition="$(ConfigDll)">
+    <ClCompile>
+      <PreprocessorDefinitions>CONFIG_DLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>CONFIG_DLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <!-- self-contained: required settings -->
+  <PropertyGroup Condition="$(ConfigSC)">
+    <TargetName>$(BinTypeWord) $(BinSuffixBits)-bit</TargetName>
+    <TargetExt>.bin</TargetExt>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="$(ConfigSC)">
+    <ClCompile>
+      <PreprocessorDefinitions>AUTOHOTKEYSC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>AUTOHOTKEYSC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="$(ConfigDebug)">_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <!-- upx compression: Release -->
+  <PropertyGroup>
+    <PackerName>upx</PackerName>
+    <PackerName Condition="'$(Platform)'=='x64'">mpress</PackerName>
+    <PackerPath Condition="'$(PackerPath)'=='' AND exists('$(PackerName).exe')">$(PackerName).exe</PackerPath>
+    <PackerPath Condition="'$(PackerPath)'=='' AND exists('..\$(PackerName).exe')">..\$(PackerName).exe</PackerPath>
+    <PackerArgs Condition="'$(PackerArgs)'=='' AND '$(PackerName)'=='upx'"> --best --no-lzma --filter=73 --compress-icons=0</PackerArgs>
+    <PackerArgs Condition="'$(PackerArgs)'=='' AND '$(PackerName)'=='mpress'"> -x</PackerArgs>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="$(ConfigRelease)">
+    <PostBuildEvent>
+      <Command>echo $(PackerName).exe disabled or not found, skipping compression</Command>
+      <Command Condition="exists('$(PackerPath)')">$(PackerPath)$(PackerArgs) "$(TargetPath)" &amp; exit 0</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <!-- win2k support -->
+  <ItemDefinitionGroup Condition="$(SupportWin2k)">
+    <ClCompile>
+      <PreprocessorDefinitions>CONFIG_WIN2K;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <MinimumRequiredVersion>5</MinimumRequiredVersion>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- Visual C++ 2010 should place any newly created properties in these groups -->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release(mbcs)|Win32'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release(mbcs)|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained|Win32'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained(debug)|Win32'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained(debug)|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained(mbcs)|Win32'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained(mbcs)|x64'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release(mbcs)|Win32'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release(mbcs)|x64'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained|Win32'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained|x64'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained(debug)|Win32'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained(debug)|x64'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained(mbcs)|Win32'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Self-contained(mbcs)|x64'" />
+  <!-- FILES -->
+  <ItemGroup>
+    <ClCompile Include="source\ahklib.cpp">
+      <ExcludedFromBuild Condition="!$(ConfigDll)">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="source\application.cpp" />
+    <ClCompile Include="source\AutoHotkey.cpp" />
+    <ClCompile Include="source\clipboard.cpp" />
+    <ClCompile Include="source\Debugger.cpp">
+      <FavorSizeOrSpeed Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Size</FavorSizeOrSpeed>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="source\globaldata.cpp" />
+    <ClCompile Include="source\hook.cpp" />
+    <ClCompile Include="source\hotkey.cpp" />
+    <ClCompile Include="source\input_object.cpp" />
+    <ClCompile Include="source\keyboard_mouse.cpp" />
+    <ClCompile Include="source\mt19937ar-cok.cpp" />
+    <ClCompile Include="source\os_version.cpp" />
+    <ClCompile Include="source\script.cpp" />
+    <ClCompile Include="source\script2.cpp" />
+    <ClCompile Include="source\script_autoit.cpp" />
+    <ClCompile Include="source\script_com.cpp" />
+    <ClCompile Include="source\script_expression.cpp" />
+    <ClCompile Include="source\script_gui.cpp" />
+    <ClCompile Include="source\script_menu.cpp" />
+    <ClCompile Include="source\script_object.cpp" />
+    <ClCompile Include="source\script_object_bif.cpp" />
+    <ClCompile Include="source\script_registry.cpp" />
+    <ClCompile Include="source\script_webgui.cpp" />
+    <ClCompile Include="source\script_cdp.cpp" />
+    <ClCompile Include="source\script_ml.cpp" />
+    <ClCompile Include="source\script_webassets.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="source\notepad_wsserver.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="source\notepad_json.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="source\notepad_onnx.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/Zc:noexceptTypes /wd4819 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="source\notepad_textcls.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/Zc:noexceptTypes /wd4819 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="source\notepad_textnn.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/Zc:noexceptTypes /wd4819 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="source\cJSON.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="source\miniz.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <!-- AutoHotkey Web: native toolkit ported from NOTEPAD.dll (crypto, OCR, HTTP, ZIP, image, QR, ...).
+         Compiled exactly like the original DLL build (C++17, /EHa, /utf-8, W1) and exposed through
+         script_ext.cpp. Files already ported earlier (onnx/textcls/textnn/wsserver/cJSON/miniz)
+         are NOT duplicated here. -->
+    <ClCompile Include="source\notepad\*.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <WarningLevel>Level1</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <AdditionalIncludeDirectories>$(ProjectDir)source;$(ProjectDir)source\notepad;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NOTEPAD_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/utf-8 /Zc:noexceptTypes /wd4819 /bigobj %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="source\notepad\qrcodegen.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level1</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="source\script_ext.cpp" />
+    <ClCompile Include="source\script_chain.cpp" />
+    <ClCompile Include="source\SimpleHeap.cpp" />
+    <ClCompile Include="source\stdafx.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="source\StringConv.cpp" />
+    <ClCompile Include="source\TextIO.cpp" />
+    <ClCompile Include="source\util.cpp" />
+    <ClCompile Include="source\var.cpp" />
+    <ClCompile Include="source\window.cpp" />
+    <ClCompile Include="source\WinGroup.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="source\ahkversion.h" />
+    <ClInclude Include="source\ahkweb_version.h" />
+    <ClInclude Include="source\script_crypt.h" />
+    <ClInclude Include="source\application.h" />
+    <ClInclude Include="source\clipboard.h" />
+    <ClInclude Include="source\config.h" />
+    <ClInclude Include="source\debug.h" />
+    <ClInclude Include="source\Debugger.h" />
+    <ClInclude Include="source\defines.h" />
+    <ClInclude Include="source\DispObject.h" />
+    <ClInclude Include="source\globaldata.h" />
+    <ClInclude Include="source\hook.h" />
+    <ClInclude Include="source\hotkey.h" />
+    <ClInclude Include="source\input_object.h" />
+    <ClInclude Include="source\keyboard_mouse.h" />
+    <ClInclude Include="source\KuString.h" />
+    <ClInclude Include="source\lib_pcre\pcre\pcret.h" />
+    <ClInclude Include="source\mt19937ar-cok.h" />
+    <ClInclude Include="source\os_version.h" />
+    <ClInclude Include="source\lib_pcre\pcre\pcre.h" />
+    <ClInclude Include="source\qmath.h" />
+    <ClInclude Include="source\resources\resource.h" />
+    <ClInclude Include="source\script.h" />
+    <ClInclude Include="source\script_webgui.h" />
+    <ClInclude Include="source\script_com.h" />
+    <ClInclude Include="source\script_func_impl.h" />
+    <ClInclude Include="source\script_object.h" />
+    <ClInclude Include="source\SimpleHeap.h" />
+    <ClInclude Include="source\stdafx.h" />
+    <ClInclude Include="source\StringConv.h" />
+    <ClInclude Include="source\TextIO.h" />
+    <ClInclude Include="source\util.h" />
+    <ClInclude Include="source\var.h" />
+    <ClInclude Include="source\window.h" />
+    <ClInclude Include="source\WinGroup.h" />
+  </ItemGroup>
+  <PropertyGroup>
+    <Masm>ml</Masm>
+    <Masm Condition="'$(Platform)'=='x64'">ml64</Masm>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <CustomBuild>
+      <Command>$(Masm) /Cx /Fo"$(SolutionDir)temp\$(Platform)\%(Filename).obj" /c "%(FullPath)"</Command>
+      <Message>
+      </Message>
+      <Outputs>$(SolutionDir)temp\$(Platform)\%(Filename).obj</Outputs>
+    </CustomBuild>
+    <ClCompile>
+      <TreatWarningAsError Condition="!$(ConfigDebug)">true</TreatWarningAsError>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="source\lib\win2kcompat.asm">
+      <ExcludedFromBuild Condition="!$(SupportWin2k)">true</ExcludedFromBuild>
+    </CustomBuild>
+    <CustomBuild Include="source\libx64call\x64call.asm">
+      <ExcludedFromBuild Condition="'$(Platform)'!='x64'">true</ExcludedFromBuild>
+    </CustomBuild>
+    <CustomBuild Include="source\libx64call\x64stub.asm">
+      <ExcludedFromBuild Condition="'$(Platform)'!='x64'">true</ExcludedFromBuild>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="source\resources\AutoHotkey.exe.manifest">
+      <Command>cscript.exe //NoLogo "$(SolutionDir)source\scripts\minman.js" "%(FullPath)" "$(SolutionDir)temp\AutoHotkey.exe.manifest"</Command>
+      <Outputs>$(SolutionDir)temp\AutoHotkey.exe.manifest</Outputs>
+      <SubType>Designer</SubType>
+    </CustomBuild>
+    <None Include="source\resources\icon_filetype.ico" />
+    <None Include="source\resources\icon_main.ico" />
+    <None Include="source\resources\icon_pause.ico" />
+    <None Include="source\resources\icon_pause_suspend.ico" />
+    <None Include="source\resources\icon_suspend.ico" />
+    <None Include="source\resources\icon_tray_win9x.ico" />
+    <None Include="source\resources\icon_tray_win9x_suspend.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="source\resources\AutoHotkey.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="source\lib_pcre\lib_pcre.vcxproj">
+      <Project>{39037993-9571-4DF2-8E39-CD2909043574}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>false</Private>
+      <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+      <UseLibraryDependencyInputs>false</UseLibraryDependencyInputs>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="debug.natvis" />
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="source\ahklib.idl">
+      <ExcludedFromBuild Condition="!$(ConfigDll)">true</ExcludedFromBuild>
+      <OutputDirectory>$(ProjectDir)source\autogenerated</OutputDirectory>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+    </Midl>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

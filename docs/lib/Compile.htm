@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="AhkWeb2Exe 컴파일, EXE 스크립트 암호화, 안티치트 오탐을 줄이는 중립 식별자.">
+<title>컴파일 / EXE 암호화 | AutoHotkey Web</title>
+<link rel="stylesheet" href="../static/theme.css">
+</head>
+<body>
+<div class="nav"><a href="../index.htm">AutoHotkey Web</a> &raquo; <a href="../index.htm#commands">함수</a> &raquo; 컴파일</div>
+
+<h1>컴파일 / EXE 암호화</h1>
+
+<h2 id="compile">컴파일 방법</h2>
+<p>stock <strong>Ahk2Exe</strong>로는 컴파일할 수 없습니다(새 명령을 모르고, 스크립트 리소스 이름과 베이스가 다릅니다). 전용 컴파일러 <code>AhkWeb2Exe</code>를 쓰세요.</p>
+<ul>
+<li>탐색기: <code>.ahkw</code> 우클릭 → <strong>Compile Script (.exe)</strong></li>
+<li>SciTE4: <code>.ahkw</code>를 열고 <strong>Ctrl+F7</strong></li>
+<li>명령줄: <code>AhkWeb2Exe.exe /in myapp.ahkw [/out myapp.exe] [/icon app.ico]</code></li>
+</ul>
+<p>단일 EXE에 웹 자산을 넣으려면 스크립트에 <code>;@AhkWeb-Assets &lt;폴더&gt;</code> 지시문을 두면 됩니다(<a href="WebGui.htm">WebGui</a> 참고).</p>
+
+<h2 id="encrypt">EXE 스크립트 암호화 (기본 적용)</h2>
+<p>컴파일하면 스크립트가 <strong>자동으로 난독화·압축</strong>되어 exe에 들어갑니다. 비밀번호나 추가 옵션은 없습니다.</p>
+<ul>
+<li>리소스 뷰어나 <code>strings</code>로 열어도 스크립트가 평문으로 보이지 않습니다(DEFLATE 압축 + 키스트림 XOR, 컨테이너 <code>AHKW1</code>).</li>
+<li>엔진이 실행 시 메모리에서 풀어 읽으므로 동작·속도에는 영향이 없습니다.</li>
+<li>서명 스캐너가 스크립트 본문 바이트로 매칭하는 것을 막습니다.</li>
+</ul>
+<div class="warning"><strong>보안 수준:</strong> 이것은 <strong>난독화</strong>입니다. 암호를 받지 않는 자체 실행 exe라 키가 바이너리 안에 있을 수밖에 없고, 실력 있는 리버서는 복원할 수 있습니다. 소스 유출 방지의 1차 방어이지, 강한 비밀 보호가 아닙니다. 진짜 비밀(API 키 등)은 <a href="Crypto.htm#dpapi">DpapiProtect</a>로 감싸 코드 밖에 두세요.</div>
+<p>컴파일된 exe의 <strong>파일 속성(버전 정보)은 모두 비어 있습니다</strong> — 제품명·회사명 등 식별 문자열이 들어가지 않습니다.</p>
+
+<h2 id="identity">중립 식별자 (안티치트 오탐 완화)</h2>
+<p>오토핫키 자체를 불법 프로그램으로 오인하는 일부 안티치트를 피하려고, <strong>탐지에 쓰이는 지점</strong>(창 클래스·창 제목·후킹 뮤텍스·버전 정보)에서 "AutoHotkey" 문자열을 없앴습니다. 내부 리소스 문자열 일부(도움말 파일명, 자체 레지스트리 키 <code>SOFTWARE\AutoHotkeyWeb</code>, WebView2 데이터 폴더명 등)에는 여전히 "AutoHotkey"가 남지만, 이들은 창/뮤텍스/네트워크로 노출되지 않아 지문 탐지와 무관합니다.</p>
+<table class="info">
+<tr><th>항목</th><th>값</th></tr>
+<tr><td>메인 창 클래스</td><td><code>AhkwShell</code> (기존 <code>AutoHotkey</code>)</td></tr>
+<tr><td>GUI 창 클래스</td><td><code>AhkwShellGui</code></td></tr>
+<tr><td>WebGui 창 클래스</td><td><code>AhkwWebView</code></td></tr>
+<tr><td>후킹 뮤텍스</td><td><code>AhkwShell Kbd</code> / <code>AhkwShell Ptr</code></td></tr>
+<tr><td>창 제목 / 트레이</td><td><code>Ahkw Shell</code></td></tr>
+<tr><td>다운로드 User-Agent</td><td><code>Mozilla/5.0</code></td></tr>
+<tr><td>컴파일된 exe 버전 정보</td><td>전부 공백</td></tr>
+</table>
+<div class="note">이 때문에 <code>ahk_class</code>로 창을 찾을 때는 새 클래스 이름을 쓰세요: 예) <code>WinActivate, ahk_class AhkwShell</code>. <code>#SingleInstance</code>와 <code>ahk_class</code>는 그대로 동작합니다.</div>
+<div class="note"><strong>개발·디버깅은 영향 없음:</strong> 인터프리터 <code>AutoHotkeyWeb.exe</code>는 SciTE4 디버거 연동을 위해 제품명과 DBGp appid에 "AutoHotkey"를 유지합니다(네트워크로 나가거나 창 제목에 쓰이지 않음). <strong>F5 실행·F7 디버그·컴파일</strong>이 모두 그대로 됩니다. 중립화는 <strong>배포되는 컴파일 exe</strong>에 적용됩니다.</div>
+
+<h2 id="related">관련</h2>
+<p><a href="Crypto.htm">암호화</a>, <a href="WebGui.htm">WebGui</a>, <a href="../index.htm">시작하기</a></p>
+<footer>AutoHotkey Web &middot; 컴파일 / EXE 암호화 &middot; <span class="lic">GPLv2 · <a href="../index.htm#license">라이선스 · 배포 · 책임</a></span></footer>
+</body>
+</html>

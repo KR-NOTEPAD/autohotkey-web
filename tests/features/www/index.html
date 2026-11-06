@@ -1,0 +1,12 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>FEATURE-TEST-TITLE</title></head>
+<body>
+<h1>feature test</h1>
+<script type="module">
+  // If this ES module import works, we are served from a real origin (Mount),
+  // not file://. Store the result on window for WebGuiGet,Eval to read.
+  import { brand } from './util.mjs';
+  window.__esm = brand();
+  window.__loc = location.origin;
+</script>
+</body></html>

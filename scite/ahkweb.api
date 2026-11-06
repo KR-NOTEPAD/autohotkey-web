@@ -1,0 +1,249 @@
+WebGui, SubCommand [, Param2, Param3, Param4] \nAutoHotkey Web: host an HTML/CSS/JS UI (WebView2) and bridge it to the script. Subcommands: New, Load, Show, Hide, Expose, On, Emit, Eval, Destroy. Use "Name:SubCommand" to target a named window (default name is 1).
+WebGui, Name:New [, Options, Title] \nCreate a hidden web window. Options: wNNN hNNN -Resize. Title is the window caption.
+WebGui, Name:Load, UrlOrFile \nNavigate the window. Accepts an http(s):// URL (e.g. a Vite dev server) or a local .html path (converted to file://).
+WebGui, Name:Show [, Options] \nShow the window. Options: wNNN hNNN, or Maximize.
+WebGui, Name:Hide \nHide the window without destroying it.
+WebGui, Name:Expose, Method [, FuncName] \nMap a JS method to an AHK function. JS calls await ahk.call(Method, obj); the AHK function receives the params as a JSON string and returns a string. FuncName defaults to Method.
+WebGui, Name:On, __Event, FuncName \nBind a lifecycle/web event (e.g. __Ready, __Close) to an AHK function.
+WebGui, Name:Emit, EventName [, Data] \nFire window.ahk.on(EventName) in the page with Data (a string).
+WebGui, Name:Eval, JsCode \nRun JavaScript in the page (fire-and-forget).
+WebGui, Name:Html, HtmlString \nLoad an HTML string directly (NavigateToString) - a single-file app needs no external .html. The window.ahk bridge still works. Origin is about:blank, so ES modules/fetch need Mount instead.
+WebGui, Name:Mount, HostName, Folder [, AccessKind] \nMap https://HostName/ to a local Folder so the page loads as a real web origin (ES modules, fetch, service workers) instead of file://. AccessKind: CORS (default) or Deny. Queue it right after New; it applies before the first Load.
+WebGui, Name:DevTools \nOpen the WebView2 DevTools window (development).
+WebGui, Name:Destroy \nClose the window and free its WebView2 resources.
+WebGuiGet, OutputVar, Name:Eval, JsCode \nRun JavaScript and store its result (JSON) in OutputVar, synchronously (pumps messages, 5s timeout). A JSON string is unquoted to a plain string; other JSON is returned as-is.
+WebGuiGet, OutputVar, Name:Hwnd \nStore the web window's handle in OutputVar so stock WinMove/WinSet/etc. can target it.
+A_AhkWebAssets \nAutoHotkey Web: path to this EXE's extracted embedded web assets (from AhkWeb2Exe ;@AhkWeb-Assets). Empty when run uncompiled.
+A_AhkWebVersion \nAutoHotkey Web: the engine version string (same numbering as A_AhkVersion).
+A_AhkWebBuild \nAutoHotkey Web: this fork's build version (date-based, e.g. 2026.11.1). Separate from A_AhkWebVersion (engine version).
+A_IsAhkWeb \nAutoHotkey Web: "1" on the AutoHotkey Web engine; empty on stock AutoHotkey.
+TextClsAvailable() \nAutoHotkey Web: 1 if onnxruntime.dll is loadable (deep-learning ready), else 0.
+TextClsVerdict(ModelDir, Text [, ThrPct:=50, MaxLen:=128]) \nAutoHotkey Web: classify Text with a pretrained ONNX model folder. Returns "verdict,label,toxicProb,cleanProb" (verdict is 악/선). Auto-loads the model (int8) on first call.
+TextCls(ModelDir, Text [, MaxLen:=128]) \nAutoHotkey Web: per-label probabilities as "label,prob;label,prob;...".
+TextClsLabels(ModelDir) \nAutoHotkey Web: newline-separated label list of the model.
+TextClsLoad(ModelDir [, UseInt8:=1]) \nAutoHotkey Web: preload a classification model. Returns 1/0.
+TextClsUnload() \nAutoHotkey Web: unload the classification model. Returns 1.
+TextClsLastError() \nAutoHotkey Web: last TextCls error text.
+TextNNAvailable() \nAutoHotkey Web: 1 if ONNX runtime is present (same gate as TextClsAvailable).
+TextNNTrain(Backbone, Dataset, Model [, Epochs:=300, Hidden:=64, MaxLen:=64, Pool:=0]) \nAutoHotkey Web: embed Dataset (label<TAB>text TSV) with the Backbone .onnx and train an MLP head into Model (.ntc). Returns the number of training sentences (0 on failure).
+TextNNClassify(Model, Text [, TopK:=3]) \nAutoHotkey Web: classify Text with a trained .ntc model. Returns "label,prob;label,prob;..." (desc, top K).
+TextNNInfo(Model) \nAutoHotkey Web: "backbone|dim|pool|labels" of a trained model.
+TextNNLoad(Model) \nAutoHotkey Web: preload a trained .ntc model. Returns 1/0.
+TextNNUnload() \nAutoHotkey Web: unload the trained model. Returns 1.
+TextNNLastError() \nAutoHotkey Web: last TextNN error text.
+WsServerStart([Port:=19222]) \nAutoHotkey Web: start the built-in WebSocket server (for CDP browser control). Returns 1/0.
+WsServerStop() \nAutoHotkey Web: stop the WebSocket server. Returns 1.
+WsServerPort() \nAutoHotkey Web: current server port (0 if stopped).
+WsServerClients() \nAutoHotkey Web: number of connected clients (e.g. the CDP extension).
+WsServerPending() \nAutoHotkey Web: number of queued inbound messages.
+WsServerSend(Text) \nAutoHotkey Web: broadcast a text frame to all clients.
+WsServerRecv([TimeoutMs:=0]) \nAutoHotkey Web: pop one inbound message ("" if none within TimeoutMs).
+WsServerLastError() \nAutoHotkey Web: last WebSocket server error text.
+JsonGet(JsonText, Path) \nAutoHotkey Web: read a value from JsonText by dotted/bracket Path. Booleans return "true"/"false", null returns "null".
+Base64Decode(B64Text) \nAutoHotkey Web: decode a base64 string and return the bytes.
+JsonParse(JsonText) \nAutoHotkey Web: parse JSON into AHK objects (arrays 1-based, true/false -> 1/0, null -> "", decimals kept as numeric strings).
+JsonStringify(Value [, Indent]) \nAutoHotkey Web: AHK object/array/value -> JSON text. Indent: number of spaces or a string; omit for compact.
+SHA256(Text) \nAutoHotkey Web: SHA-256 hex of Text (UTF-8). Also SHA1/SHA384/SHA512/MD5.
+SHA1(Text) \nAutoHotkey Web: SHA-1 hex.
+SHA384(Text) \nAutoHotkey Web: SHA-384 hex.
+SHA512(Text) \nAutoHotkey Web: SHA-512 hex.
+MD5(Text) \nAutoHotkey Web: MD5 hex.
+HMAC(Text, Key) \nAutoHotkey Web: HMAC-SHA256 hex.
+HMAC512(Text, Key) \nAutoHotkey Web: HMAC-SHA512 hex.
+CRC32(Text) \nAutoHotkey Web: CRC32 hex. Also Adler32/Fnv1a.
+Adler32(Text) \nAutoHotkey Web: Adler-32 hex.
+Fnv1a(Text) \nAutoHotkey Web: FNV-1a hex.
+SHA256File(Path) \nAutoHotkey Web: SHA-256 hex of a file.
+CRC32File(Path) \nAutoHotkey Web: CRC32 hex of a file.
+VerifyFileHash(Path, ExpectedHex) \nAutoHotkey Web: 1 if the file's SHA-256 matches.
+Base64Encode(Text) \nAutoHotkey Web: UTF-8 text -> Base64.
+Base64UrlEncode(Text) \nAutoHotkey Web: URL-safe Base64.
+Base64UrlDecode(Text) \nAutoHotkey Web: decode URL-safe Base64.
+HexEncode(Text) \nAutoHotkey Web: UTF-8 text -> hex.
+HexDecode(Hex) \nAutoHotkey Web: hex -> UTF-8 text.
+RandomBase64([Bytes:=32]) \nAutoHotkey Web: cryptographically secure random bytes as Base64.
+RandInt(Lo, Hi) \nAutoHotkey Web: cryptographically secure random integer in [Lo, Hi].
+UUID() \nAutoHotkey Web: random UUID v4.
+EncryptPassword(PlainText, Password [, Iterations:=100000]) \nAutoHotkey Web: AES-256-GCM with PBKDF2 key; returns "v1:salt:nonce:tag:cipher".
+DecryptPassword(Token, Password) \nAutoHotkey Web: decrypt EncryptPassword output; "" on wrong password or tampering.
+EncryptFile(InPath, OutPath, Password [, Iterations:=100000]) \nAutoHotkey Web: AES-256-GCM file encryption. 1/0.
+DecryptFile(InPath, OutPath, Password) \nAutoHotkey Web: decrypt EncryptFile output. 1/0.
+HashPassword(Password [, Iterations:=100000]) \nAutoHotkey Web: PBKDF2 hash for storing passwords.
+VerifyPassword(Password, Token) \nAutoHotkey Web: 1 if Password matches a HashPassword token.
+DpapiProtect(Text [, Entropy, MachineScope:=false]) \nAutoHotkey Web: Windows DPAPI protect -> Base64 (only this user/PC can decrypt).
+DpapiUnprotect(B64 [, Entropy]) \nAutoHotkey Web: DPAPI unprotect.
+EcdsaKeyPair() \nAutoHotkey Web: new ECDSA P-256 key pair "privateB64:publicB64".
+EcdsaSign(Text, PrivateKeyB64) \nAutoHotkey Web: ECDSA signature (Base64).
+EcdsaVerify(Text, SignatureB64, PublicKeyB64) \nAutoHotkey Web: 1 if the signature is valid.
+StrEntropy(Text) \nAutoHotkey Web: Shannon entropy x1000.
+LuhnCheck(Number) \nAutoHotkey Web: 1 if the number passes the Luhn check (cards).
+Compress(Text [, Level:=-1]) \nAutoHotkey Web: DEFLATE -> Base64.
+Decompress(B64) \nAutoHotkey Web: inverse of Compress.
+CompressFile(InPath, OutPath [, Level:=-1]) \nAutoHotkey Web: DEFLATE a file. 1/0.
+DecompressFile(InPath, OutPath) \nAutoHotkey Web: inverse of CompressFile. 1/0.
+ZipAddFile(ZipPath, SrcPath, NameInZip [, Level:=-1]) \nAutoHotkey Web: add a file to a ZIP (created if missing). 1/0.
+ZipList(ZipPath) \nAutoHotkey Web: entries, one per line.
+ZipExtractAll(ZipPath, DestDir) \nAutoHotkey Web: extract all entries. 1/0.
+ZipExtractFile(ZipPath, NameInZip, OutPath) \nAutoHotkey Web: extract one entry. 1/0.
+DetectEncoding(Path) \nAutoHotkey Web: utf8bom / utf8 / utf16le / utf16be / ansi.
+ConvertToUtf8(InPath, OutPath) \nAutoHotkey Web: re-save a text file as UTF-8. 1/0.
+FileRecycle(Path) \nAutoHotkey Web: send a file to the Recycle Bin. 1/0.
+DirRecycle(Path) \nAutoHotkey Web: send a folder to the Recycle Bin. 1/0.
+DirList(Dir [, Pattern:="*"]) \nAutoHotkey Web: file names, one per line.
+SpecialFolder(Which) \nAutoHotkey Web: known folder path (desktop, documents, downloads, appdata, ...).
+TempFile() \nAutoHotkey Web: unique temp file path.
+FormatBytes(Bytes) \nAutoHotkey Web: "1.50 KB" style size text.
+WatchFolder(Dir [, SubTree:=1, TimeoutMs:=10000]) \nAutoHotkey Web: wait for one change in Dir and describe it.
+IniKeys(Path, Section) \nAutoHotkey Web: key names of an INI section, one per line.
+HttpGet(Url) \nAutoHotkey Web: GET -> response body (UTF-8). Status via HttpLastStatus().
+HttpPost(Url [, Body, ContentType]) \nAutoHotkey Web: POST -> response body.
+HttpLastStatus() \nAutoHotkey Web: HTTP status of the last HttpGet/HttpPost/HttpDownload.
+HttpDownload(Url, OutPath) \nAutoHotkey Web: download to a file. 1/0.
+HttpUploadFile(Url, FilePath [, FieldName:="file", FileName, ExtraFields]) \nAutoHotkey Web: multipart upload -> response body.
+DownloadStart(Url, OutPath) \nAutoHotkey Web: background download -> id.
+DownloadStatus(Id) \nAutoHotkey Web: background download progress text.
+DownloadFree(Id) \nAutoHotkey Web: release a background download.
+HttpJobStart(Method, Url [, Headers, Body, TimeoutMs:=30000, MaxRetry:=3]) \nAutoHotkey Web: queue a parallel HTTP request -> id.
+HttpJobStatus(Id) \nAutoHotkey Web: "state,http,tries,err,ms" (state 0 wait 1 run 2 done 3 fail).
+HttpJobResult(Id) \nAutoHotkey Web: response body of a finished job.
+HttpJobHeaders(Id) \nAutoHotkey Web: response headers of a finished job.
+HttpJobError(Id) \nAutoHotkey Web: error text of a failed job.
+HttpJobFree(Id) \nAutoHotkey Web: release a job.
+HttpJobWaitAny([TimeoutMs:=100]) \nAutoHotkey Web: wait until any job finishes.
+HttpJobSetConcurrency([N:=6]) \nAutoHotkey Web: max parallel jobs.
+HttpJobSetMinGap([Ms:=0]) \nAutoHotkey Web: minimum gap between request starts.
+HttpJobCancelAll() \nAutoHotkey Web: cancel all jobs.
+HttpJobPoolInfo() \nAutoHotkey Web: pool statistics.
+UrlEncode(Text) \nAutoHotkey Web: percent-encode (UTF-8).
+UrlDecode(Text) \nAutoHotkey Web: percent-decode.
+QueryGet(Query, Key) \nAutoHotkey Web: value of Key in "a=1&b=2".
+HtmlEncode(Text) \nAutoHotkey Web: escape & < > " '.
+HtmlDecode(Text) \nAutoHotkey Web: unescape HTML entities.
+JsonValid(JsonText) \nAutoHotkey Web: 1 if JsonText is valid JSON.
+JsonPretty(JsonText) \nAutoHotkey Web: re-indent JSON text.
+WsConnect(Url) \nAutoHotkey Web: WebSocket client connect -> id.
+WsSend(Id, Text) \nAutoHotkey Web: send a text frame.
+WsReceive(Id) \nAutoHotkey Web: next received message ("" if none).
+WsClose(Id) \nAutoHotkey Web: close a WebSocket client.
+ImageSearchAll(ImagePath, X1, Y1, X2, Y2 [, Tolerance:=10, MaxMatches:=0]) \nAutoHotkey Web: all matches on screen "x,y;x,y;..." ("" if none).
+CaptureRegion(X, Y, W, H, OutPath) \nAutoHotkey Web: screen region -> PNG/JPG. 1/0.
+CaptureRegionRotated(X, Y, W, H, AngleDeg, OutPath [, Quality:=95]) \nAutoHotkey Web: capture and rotate.
+QrEncode(Text, OutPng [, Scale:=8, Border:=4, Ecc:=1]) \nAutoHotkey Web: QR code PNG. Ecc 0..3 = L M Q H. 1/0.
+ClipboardImageToPng(OutPng) \nAutoHotkey Web: save the clipboard image. 1/0.
+PngToClipboardImage(InPng) \nAutoHotkey Web: put an image on the clipboard. 1/0.
+ImageWidth(Path) \nAutoHotkey Web: image width in pixels.
+ImageHeight(Path) \nAutoHotkey Web: image height in pixels.
+ImageResize(InPath, OutPath, MaxW, MaxH [, Quality:=85]) \nAutoHotkey Web: fit inside MaxW x MaxH. 1/0.
+ImageConvert(InPath, OutPath [, Quality:=75]) \nAutoHotkey Web: convert by extension (png/jpg/bmp/gif/tif). 1/0.
+ImageRotate(InPath, OutPath, AngleDeg [, KeepSize:=true, BgRgb:=0, Quality:=95]) \nAutoHotkey Web: rotate an image. 1/0.
+ImageEnhance(InPath, OutPath [, ScalePct:=200, Opts:="auto", Quality:=95]) \nAutoHotkey Web: upscale/sharpen/denoise for OCR. 1/0.
+ImageQuality(InPath) \nAutoHotkey Web: sharpness/brightness/contrast report.
+SelectRegion() \nAutoHotkey Web: let the user drag a screen rectangle -> "x,y,w,h" ("" if cancelled).
+MonitorsJson() \nAutoHotkey Web: monitors as JSON.
+DetectColor(X1, Y1, X2, Y2, Rgb [, Tol:=10, MinPixels:=20]) \nAutoHotkey Web: bounding box of pixels near Rgb.
+MatchTemplate(NeedlePath, X1, Y1, X2, Y2 [, ScaleMinPct:=80, ScaleMaxPct:=120, ScaleStepPct:=10, Step:=2]) \nAutoHotkey Web: multi-scale template match "x,y,score,scalePct".
+ColorDistance(Rgb1, Rgb2) \nAutoHotkey Web: RGB distance 0..441.
+RgbToHsv(Rgb) \nAutoHotkey Web: "h,s,v".
+HsvToRgb(H, S, V) \nAutoHotkey Web: 0xRRGGBB.
+OcrImage(ImagePath [, Lang]) \nAutoHotkey Web: Windows built-in OCR of an image file. Lang e.g. "ko", "en".
+OcrScreen(X, Y, W, H [, Lang]) \nAutoHotkey Web: Windows built-in OCR of a screen region.
+OcrLanguages() \nAutoHotkey Web: installed Windows OCR languages.
+OcrImageAI(ImagePath [, ModelDir, Opts]) \nAutoHotkey Web: AI Korean OCR (PaddleOCR ONNX, models\ocr). Opts: enhance cls rot=auto vin digits data sr.
+OcrScreenAI(X, Y, W, H [, ModelDir, Opts]) \nAutoHotkey Web: AI Korean OCR of a screen region.
+OcrAIError() \nAutoHotkey Web: last AI OCR error text.
+StrUpper(Text) \nAutoHotkey Web: upper case. Method: "abc".Upper()
+StrLower(Text) \nAutoHotkey Web: lower case. Method: .Lower()
+StrTitle(Text) \nAutoHotkey Web: title case. Method: .Title()
+StrRepeat(Text, N) \nAutoHotkey Web: repeat. Method: .Repeat(N)
+StrPadLeft(Text, Width [, Pad:=" "]) \nAutoHotkey Web: left pad. Method: .PadLeft(W, P)
+StrPadRight(Text, Width [, Pad:=" "]) \nAutoHotkey Web: right pad. Method: .PadRight(W, P)
+StrReverse(Text) \nAutoHotkey Web: reverse (Unicode-aware). Method: .Reverse()
+StrCount(Text, Sub) \nAutoHotkey Web: occurrences of Sub. Method: .Count(Sub)
+NaturalCompare(A, B) \nAutoHotkey Web: Explorer-style compare (-1/0/1), "a2" < "a10".
+ToBase(DecimalText, Base) \nAutoHotkey Web: decimal -> base 2..36.
+FromBase(Text, Base) \nAutoHotkey Web: base 2..36 -> decimal.
+Slugify(Text) \nAutoHotkey Web: "my-file-name" style slug. Method: .Slug()
+ToRoman(N) \nAutoHotkey Web: Roman numerals.
+FromRoman(Roman) \nAutoHotkey Web: Roman -> number.
+HangulChosung(Text) \nAutoHotkey Web: Korean initial consonants (chosung). Method: .Chosung()
+ToHalfWidth(Text) \nAutoHotkey Web: full-width -> half-width. Method: .HalfWidth()
+Levenshtein(A, B) \nAutoHotkey Web: edit distance.
+SimilarityRatio(A, B) \nAutoHotkey Web: similarity 0..100. Method: .Similarity(B)
+JaroWinkler(A, B) \nAutoHotkey Web: Jaro-Winkler 0..100.
+DamerauLevenshtein(A, B) \nAutoHotkey Web: edit distance with transpositions.
+DamerauRatio(A, B) \nAutoHotkey Web: Damerau similarity 0..100.
+Hamming(A, B) \nAutoHotkey Web: Hamming distance.
+JaccardChar(A, B) \nAutoHotkey Web: character Jaccard 0..100.
+DiceCoefficient(A, B) \nAutoHotkey Web: bigram Dice 0..100.
+CosineChar(A, B) \nAutoHotkey Web: character cosine 0..100.
+LcsLength(A, B) \nAutoHotkey Web: longest common subsequence length.
+NgramSimilarity(A, B [, N:=2]) \nAutoHotkey Web: n-gram similarity 0..100.
+FuzzyBestMatch(Needle, ListNl) \nAutoHotkey Web: best match among newline-separated candidates.
+FuzzyBestMatchEx(Needle, ListNl [, Algo:="lev"]) \nAutoHotkey Web: best match with algorithm (lev, jw, dice, ...).
+CsvGet(Csv, Row, Col) \nAutoHotkey Web: one CSV cell (RFC 4180 quoting).
+CsvRowCount(Csv) \nAutoHotkey Web: number of CSV rows.
+CsvColCount(Csv [, Row:=1]) \nAutoHotkey Web: number of columns in Row.
+NowUnix() \nAutoHotkey Web: current Unix time (seconds).
+UnixToIso(UnixSeconds) \nAutoHotkey Web: Unix time -> ISO 8601 (UTC).
+IsoToUnix(Iso) \nAutoHotkey Web: ISO 8601 -> Unix time.
+Gcd(A, B) \nAutoHotkey Web: greatest common divisor.
+Lcm(A, B) \nAutoHotkey Web: least common multiple.
+Join([Sep:=",", KvSep:="="]) \nArray/object method: join values (maps: key=value).
+ToJson([Pretty:=true]) \nArray/object method: JSON text.
+Sort([Options]) \nArray method: NEW sorted array. Options "N D C NAT", a compare function fn(a,b), or {by, desc, numeric, natural, cs, fn}.
+SortBy(Prop [, Options]) \nArray method: NEW array sorted by element[Prop].
+Reverse() \nArray method: NEW reversed array.  String method: reversed text.
+Shuffle() \nArray method: NEW shuffled array.
+Unique([Prop]) \nArray method: NEW array without duplicates.
+Slice([Start:=1, Stop:=0]) \nArray method: NEW sub-array, 1-based inclusive; negatives count from the end.
+Chunk([Size:=2]) \nArray method: NEW array of arrays.
+Flatten([Depth:=-1]) \nArray method: NEW flat array.
+Map(Fn) \nArray method: NEW array of Fn(value, key, arr).
+Filter(Fn) \nArray method: NEW array of items where Fn(value, key, arr) is true.
+Reduce(Fn [, Init]) \nArray method: Fn(acc, value, key) folded over the items.
+Each(Fn) \nArray method: call Fn(value, key, arr) for each item; returns the array (chainable).
+Find(Fn [, Default]) \nArray method: first value where Fn is true.
+FindKey(Fn) \nArray method: first key where Fn is true.
+Any(Fn) \nArray method: 1 if Fn is true for any item (alias some).
+All(Fn) \nArray method: 1 if Fn is true for every item (alias every).
+CountIf(Fn) \nArray method: number of items where Fn is true.
+Pluck(Prop) \nArray method: NEW array of element[Prop].
+Where(Prop [, Value, Op:="="]) \nArray method: NEW array filtered by element[Prop]. Op: = == != > >= < <= contains startswith.
+GroupBy(PropOrFn) \nArray method: map of arrays grouped by element[Prop] or Fn(value).
+Top([N:=10, Prop, Desc:=true]) \nArray method: NEW array of the N largest (by Prop).
+Pick(Keys*) \nObject method: NEW object with only these keys.
+Omit(Keys*) \nObject method: NEW object without these keys.
+Diff(Other) \nArray method: NEW array of values not in Other.
+Intersect(Other) \nArray method: NEW array of values also in Other.
+Union(Others*) \nArray method: NEW array of distinct values from all.
+Compact([ZeroToo:=false]) \nArray method: NEW array without empty values.
+Has(Value [, CaseSense]) \nArray method: 1 if Value is present (alias includes).
+IndexOf(Value [, CaseSense]) \nArray method: first index of Value or 0.  String method: InStr.
+KeyOf(Value [, CaseSense]) \nObject method: first key holding Value.
+First() \nArray method: first value.
+Last() \nArray method: last value.
+Keys() \nObject method: NEW array of keys.
+Values() \nObject method: NEW array of values.
+Get(Path [, Default]) \nObject method: nested value by "a.b.1.c".
+Set(Path, Value) \nObject method: set a nested value (creates parents); returns the object.
+HasPath(Path) \nObject method: 1 if the nested path exists.
+Append(Values*) \nArray method: push values; returns the array.
+Prepend(Values*) \nArray method: insert values at the front; returns the array.
+Copy([Deep:=true]) \nObject method: deep (or shallow) copy.
+Sum([Prop]) \nArray method: sum of numbers. Also Min Max Avg Median Stdev.
+Avg([Prop]) \nArray method: mean.
+Median([Prop]) \nArray method: median.
+Stdev([Prop, Sample:=true]) \nArray method: standard deviation.
+Trim([OmitChars]) \nString method: also LTrim RTrim. "  a ".Trim()
+Split(Delimiters [, OmitChars]) \nString method: StrSplit -> array (chainable).
+Lines() \nString method: array of lines.
+Contains(Needle [, CaseSense]) \nString method: 1 if Needle occurs.
+StartsWith(Prefix [, CaseSense]) \nString method.
+EndsWith(Suffix [, CaseSense]) \nString method.
+Left(N) \nString method: first N characters.
+Right(N) \nString method: last N characters.
+Replace(Search [, Replace, OutCount, Limit]) \nString method: StrReplace.
+IsNumber() \nString method: 1 if numeric.
+ToNumber() \nString method: numeric value (0 if not numeric).
+Quote() \nString method: JSON-quoted string.
+Wrap(Left [, Right]) \nString method: Left . text . Right.

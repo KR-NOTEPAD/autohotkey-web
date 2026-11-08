@@ -9,7 +9,7 @@
 <body>
 
 <h1>AutoHotkey Web</h1>
-<p><strong>AutoHotkey Web</strong>은 AutoHotkey v1.1.37.02를 포크한 독립 실행 엔진입니다. 문법은 v1과 <strong>완전히 동일</strong>하며, 다음 기능이 네이티브로 추가되었습니다.</p>
+<p>AutoHotkey Web은 AutoHotkey v1.1.37.02를 포크해서 만든 실행 엔진입니다. 문법은 v1과 같아서 기존 스크립트를 그대로 쓸 수 있고, 아래 기능들이 엔진 안에 들어 있습니다.</p>
 <ul>
 <li><a href="lib/WebGui.htm"><strong>WebGui</strong></a> &mdash; HTML/CSS/JS(React·Vue 등) UI를 WebView2로 띄우고 AHK와 연결하는 하이브리드 앱 명령.</li>
 <li><a href="lib/DeepLearning.htm"><strong>TextCls / TextNN</strong></a> &mdash; ONNX 기반 한국어 텍스트 분류·즉석 학습 내장 함수.</li>
@@ -21,7 +21,7 @@
 <li><a href="lib/Toolkit.htm"><strong>툴킷</strong></a> &mdash; HTTP·병렬요청·WebSocket 클라이언트, ZIP·인코딩·휴지통, 이미지서치 전체·템플릿매칭·QR·클립보드 이미지, 문자열 유사도·CSV.</li>
 </ul>
 
-<div class="note">기존 v1 스크립트는 그대로 실행됩니다. 원본 AutoHotkey 설치와 창 클래스·레지스트리·컴파일 마커가 분리되어 <strong>공존</strong>합니다.</div>
+<div class="note">원래 AutoHotkey와 창 클래스, 레지스트리 위치, 컴파일 표시가 모두 달라서 한 PC에 같이 설치해도 서로 영향을 주지 않습니다.</div>
 
 <h2 id="install">설치 (권장)</h2>
 <p><code>installer\output\AutoHotkeyWeb_Setup_*.exe</code>를 실행하면 전부 자동 설치됩니다(한국어/영어 마법사).</p>
@@ -100,14 +100,11 @@ REM -> AhkWeb2Exe.exe, AutoHotkeyWeb.bin</pre>
 <tr><td><code>A_AhkWebFiles</code></td><td>EXE에 포함한 파일(<code>;@AhkWeb-Include</code>)이 풀린 폴더. 미컴파일 시 <code>A_ScriptDir</code>. <a href="lib/Compile.htm#files">컴파일 &gt; 파일 포함</a></td></tr>
 </table>
 
-<h2 id="license">라이선스 · 배포 · 책임</h2>
-<ul>
-<li><strong>소스 공개 의무:</strong> 이 소스로 만든 바이너리를 배포하면(<code>AhkWeb2Exe</code>로 컴파일한 <code>.exe</code> 포함) 대응하는 전체 소스를 GPLv2로 공개해야 합니다. 컴파일 exe의 스크립트 난독화는 소스 공개 의무를 면제하지 않습니다.</li>
-<li><strong>서드파티(별도 라이선스):</strong> ONNX Runtime(MIT), Microsoft Edge WebView2 SDK(별도 약관), miniz·cJSON·qrcodegen(MIT). 이들의 라이선스·고지를 함께 지켜야 합니다.</li>
-<li><strong>번들 모델(별도 라이선스, 재배포 가능):</strong> kor_unsmile(Apache-2.0), KoSimCSE(CC BY-SA 4.0 — 출처표시+동일조건), PP-OCRv5 한글(Apache-2.0). 출처 표시 문구와 상세는 저장소의 <code>MODELS.md</code>를 참고하세요.</li>
-<li><strong>상표:</strong> "AutoHotkey"는 원 상표권자의 상표이며, 본 포크는 원 프로젝트와 <strong>무관</strong>합니다. 배포 exe의 창 클래스·버전 문자열은 중립화되어 있습니다(개발용 인터프리터는 디버거 호환을 위해 "AutoHotkey" 유지). 제품명에 "AutoHotkey"를 쓰기 전 상표 사용 가부를 확인하세요.</li>
-</ul>
-<div class="note">전체 라이선스 전문은 배포물의 <code>LICENSE</code> 파일에 있습니다. 이 요약은 편의를 위한 것이며 법률 자문이 아닙니다.</div>
+<h2 id="license">라이선스</h2>
+<p>AutoHotkey Web은 AutoHotkey v1.1과 같은 GPLv2를 따릅니다. 이 소스로 만든 프로그램을 배포할 때는 <code>AhkWeb2Exe</code>로 컴파일한 <code>.exe</code>라도 대응하는 소스 전체를 GPLv2로 공개해야 합니다. 컴파일할 때 스크립트를 알아보기 어렵게 섞어 넣는 것과 소스 공개 의무는 별개입니다.</p>
+<p>함께 배포하는 ONNX Runtime과 miniz, cJSON, qrcodegen은 MIT 라이선스이고, WebView2 SDK는 Microsoft의 약관을 따릅니다. 따로 받는 모델은 kor_unsmile과 한국어 PP-OCRv5가 Apache-2.0, KoSimCSE가 CC BY-SA 4.0입니다. KoSimCSE는 출처를 밝혀야 하고 고쳐서 배포하면 같은 라이선스로 공개해야 합니다. 출처 표시 문구는 저장소의 <code>MODELS.md</code>에 있습니다.</p>
+<p>"AutoHotkey"는 원래 상표권자의 상표이고, 이 포크는 AutoHotkey 프로젝트와 관계가 없습니다. 컴파일한 exe의 창 클래스와 버전 정보에는 이 이름이 들어가지 않지만, 개발용 인터프리터는 SciTE4 디버거 때문에 이름을 남겨 두었습니다. 만든 프로그램 이름에 "AutoHotkey"를 넣으려면 먼저 상표 사용 조건을 확인해 주세요.</p>
+<div class="note">라이선스 전문은 배포물의 <code>LICENSE</code> 파일에 있습니다. 이 페이지는 이해를 돕기 위한 요약이고 법률 자문이 아닙니다.</div>
 
 <footer>AutoHotkey Web &middot; AutoHotkey v1.1.37.02 기반 &middot; GPLv2</footer>
 </body>

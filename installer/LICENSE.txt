@@ -1,10 +1,45 @@
-AutoHotkey Web - a fork of AutoHotkey v1.1 (GPLv2).
-Copyright (C) AutoHotkey Foundation LLC and contributors.
-AutoHotkey Web additions (WebGui, WebGuiGet, single-EXE asset
-bundling) are distributed under the same license.
+AutoHotkey Web
 
-This program is free software distributed under the GNU General Public License
-version 2, reproduced in full below.
+AutoHotkey Web is a fork of AutoHotkey v1.1.37.02
+(https://github.com/AutoHotkey/AutoHotkey). It is released under the GNU
+General Public License, version 2, which is the license AutoHotkey v1.1 uses.
+The full text of the license follows this notice.
+
+Copyright (C) AutoHotkey Foundation LLC and the original AutoHotkey authors.
+Copyright (C) AutoHotkey Web contributors, for the changes made in this fork.
+
+Everything added in this fork is under the same license. That covers the
+WebGui and WebGuiGet commands built on WebView2, the native toolkit (hashing,
+AES-GCM, DPAPI, ECDSA, Korean OCR with PaddleOCR models or Windows OCR, HTTP
+and WebSocket clients, ZIP, image search, QR codes and string helpers), method
+chaining for strings, arrays and objects along with JsonParse and
+JsonStringify, the TextCls and TextNN text classification functions, the
+WsServer CDP server and the bundled Cdp.ahk, and the AhkWeb2Exe compiler
+together with its setup wizard.
+
+If you distribute a program built from this source, including an .exe made
+with AhkWeb2Exe, the GPL requires you to make the complete corresponding source
+available under the same license.
+
+A few components shipped with AutoHotkey Web are not part of this project and
+keep their own licenses. Microsoft releases ONNX Runtime (onnxruntime.dll)
+under the MIT License and the WebView2 loader under BSD-3-Clause (see
+third_party/webview2/LICENSE.txt); the WebView2 Runtime itself is installed
+separately by Windows or by Microsoft's installer. miniz, cJSON and qrcodegen
+are MIT licensed.
+
+The optional model files offered on the Releases page have their own terms as
+well. kor_unsmile from Smilegate AI and the Korean PP-OCRv5 models from
+PaddlePaddle are Apache-2.0. KoSimCSE-bert from BM-K is CC BY-SA 4.0, which
+asks for attribution and for modified versions to be shared under the same
+license. MODELS.md has the sources and the attribution text.
+
+"AutoHotkey" is a trademark of its owner. This fork is not affiliated with or
+endorsed by the AutoHotkey project, so check the trademark terms before
+redistributing it under a name that contains "AutoHotkey".
+
+There is no warranty. Sections 11 and 12 of the license below explain this in
+full.
 
 ============================================================================
                     GNU GENERAL PUBLIC LICENSE

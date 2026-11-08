@@ -1,61 +1,48 @@
-# 번들 모델 출처 · 라이선스
+# 모델 파일의 출처와 라이선스
 
-딥러닝 기능(한글 OCR, 텍스트 분류/학습)에 쓰는 ONNX 모델은 용량이 커서(~230MB)
-**리포에 포함하지 않고 GitHub Releases(`models-<ver>.zip`)로 배포**합니다.
-이 프로젝트의 GPLv2는 **코드에만** 적용되고, 모델 가중치에는 각 원본 라이선스가 적용됩니다.
+한글 OCR과 텍스트 분류·학습에 쓰는 ONNX 모델은 합쳐서 230MB쯤 되기 때문에 저장소에는 넣지 않고 GitHub Releases에 `models-<버전>.zip`으로 따로 올립니다. 이 프로젝트의 GPLv2는 코드에만 적용되고, 모델 가중치에는 각자의 원래 라이선스가 그대로 적용됩니다.
 
-아래는 2026-11 기준으로 각 모델 페이지의 라이선스를 **직접 확인한** 결과입니다.
-세 모델 모두 **재배포·상업적 사용이 가능**하며, 각 조건(출처 표시 등)을 지키면 됩니다.
+아래 내용은 2026년 11월에 각 모델 페이지를 직접 확인한 것입니다. 세 모델 모두 재배포와 상업적 사용이 가능하고, 출처 표시 같은 조건만 지키면 됩니다.
 
-| 폴더 | 모델 | 원본 | 라이선스 | 재배포 | 조건 |
-|---|---|---|---|---|---|
-| `models/kor_unsmile/` | `model_int8.onnx` + vocab/labels/rules | [smilegate-ai/kor_unsmile](https://huggingface.co/smilegate-ai/kor_unsmile) (KcBERT 파인튜닝) | **Apache-2.0** (모델) | ✅ 상업적 사용 가능 | 출처·NOTICE 표시 |
-| `models/kor_embed/` | `kosimcse_embed_int8.onnx` + vocab | [BM-K/KoSimCSE-bert](https://huggingface.co/BM-K/KoSimCSE-bert) | **CC BY-SA 4.0** | ✅ 상업적 사용 가능 | 출처 표시 + **동일조건 변경허락(ShareAlike)** |
-| `models/ocr/` | `det.onnx`, `rec_korean_v5.onnx`, `cls.onnx`, `korean_dict_v5.txt` | [PaddlePaddle/korean_PP-OCRv5_mobile_rec](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec) 외 | **Apache-2.0** | ✅ 상업적 사용 가능 | 출처·NOTICE 표시 |
+| 폴더 | 파일 | 원본 | 라이선스 | 지킬 조건 |
+|---|---|---|---|---|
+| `models/kor_unsmile/` | `model_int8.onnx`, vocab, labels, rules | [smilegate-ai/kor_unsmile](https://huggingface.co/smilegate-ai/kor_unsmile) | Apache-2.0 | 출처와 NOTICE 표시 |
+| `models/kor_embed/` | `kosimcse_embed_int8.onnx`, vocab | [BM-K/KoSimCSE-bert](https://huggingface.co/BM-K/KoSimCSE-bert) | CC BY-SA 4.0 | 출처 표시, 고쳐서 배포하면 같은 라이선스 |
+| `models/ocr/` | `det.onnx`, `rec_korean_v5.onnx`, `cls.onnx`, `korean_dict_v5.txt` | [PaddlePaddle/korean_PP-OCRv5_mobile_rec](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec) 등 | Apache-2.0 | 출처와 NOTICE 표시 |
 
-## 라이선스 상세 (직접 확인)
+## 모델별 설명
 
-### kor_unsmile — Apache-2.0 (모델), 데이터셋은 별개
-Smilegate AI의 공식 고지: **"UnSmile의 소스코드 및 baseline 모델은 Apache 2.0, 데이터셋은
-CC-BY-NC-ND 4.0"**. 우리는 **export된 모델 가중치만** 번들하므로 Apache-2.0가 적용되어
-상업적 재배포가 가능합니다. **데이터셋(비상업 NC-ND)은 포함하지 않습니다.**
+kor_unsmile은 Smilegate AI가 공개한 혐오 표현 분류 모델로, KcBERT를 파인튜닝한 것입니다. Smilegate는 저장소에서 소스 코드와 기본 모델은 Apache 2.0, 데이터셋은 CC-BY-NC-ND 4.0이라고 밝히고 있습니다. 여기에는 ONNX로 내보낸 모델 가중치만 들어 있고 데이터셋은 들어 있지 않으므로 Apache-2.0을 따릅니다. Hugging Face 모델 카드에는 라이선스 표시가 비어 있을 수 있는데, 위의 저장소 고지를 근거로 삼았습니다.
 
-### KoSimCSE — CC BY-SA 4.0 (ShareAlike 주의)
-BM-K의 Korean-Sentence-Embedding 저장소 라이선스: **CC BY-SA 4.0**.
-- **BY(저작자표시):** 출처(BM-K/KoSimCSE-bert)를 명시해야 합니다.
-- **SA(동일조건변경허락):** 이 모델을 **개조(파인튜닝 등)해 배포**하면 그 결과물도
-  CC BY-SA 4.0으로 공개해야 합니다. 단순히 포맷만 바꾼 ONNX 변환본을 **그대로 재배포**하는
-  것은 괜찮습니다. (코드와는 별개 라이선스이므로 GPLv2와 충돌하지 않습니다.)
+KoSimCSE-bert는 BM-K의 Korean-Sentence-Embedding 저장소에서 나온 문장 임베딩 모델이고 CC BY-SA 4.0입니다. 쓰려면 출처(BM-K/KoSimCSE-bert)를 밝혀야 하고, 이 모델을 파인튜닝하는 식으로 고쳐서 배포하면 그 결과물도 CC BY-SA 4.0으로 공개해야 합니다. 형식만 ONNX로 바꾼 파일을 그대로 다시 배포하는 것은 문제가 없습니다. 코드와는 라이선스가 따로라서 GPLv2와 부딪히지 않습니다.
 
-### PaddleOCR 한글 (PP-OCRv5) — Apache-2.0
-`PaddlePaddle/korean_PP-OCRv5_mobile_rec` 모델카드에 `license: apache-2.0` 명시.
-PaddleOCR 프로젝트 전체가 Apache-2.0. det/rec/cls 모델 모두 재배포·상업적 사용 가능.
+PP-OCRv5 한국어 모델은 PaddlePaddle의 모델 카드에 `license: apache-2.0`으로 적혀 있고, PaddleOCR 프로젝트 전체가 Apache-2.0입니다. 검출, 인식, 방향 분류 모델 모두 재배포와 상업적 사용이 가능합니다.
 
-## 출처 표시(ATTRIBUTION) — Releases 본문/NOTICE에 넣을 문구
+## 출처 표시 문구
+
+릴리스 본문이나 NOTICE 파일에 아래 문구를 넣습니다.
+
 ```
 This release bundles third-party model weights under their own licenses:
-- kor_unsmile (Smilegate AI) — Apache-2.0 — https://huggingface.co/smilegate-ai/kor_unsmile
-- KoSimCSE-bert (BM-K)       — CC BY-SA 4.0 — https://huggingface.co/BM-K/KoSimCSE-bert
-- PP-OCRv5 Korean (PaddlePaddle) — Apache-2.0 — https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec
+- kor_unsmile (Smilegate AI), Apache-2.0: https://huggingface.co/smilegate-ai/kor_unsmile
+- KoSimCSE-bert (BM-K), CC BY-SA 4.0: https://huggingface.co/BM-K/KoSimCSE-bert
+- PP-OCRv5 Korean (PaddlePaddle), Apache-2.0: https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec
 See MODELS.md for terms. The project's own code is GPLv2 and separate from these weights.
 ```
 
-## 직접 만들기 (재현)
-원본 플러그인 저장소의 export 스크립트로 동일 모델을 생성할 수 있습니다.
+## 직접 만들기
+
+원래 플러그인 저장소에 있는 export 스크립트로 같은 모델을 만들 수 있습니다.
+
 ```bash
 pip install torch transformers onnx onnxruntime paddleocr
-python export_kor_unsmile.py   # -> models/kor_unsmile/   (smilegate-ai/kor_unsmile)
-python export_kosimcse.py      # -> models/kor_embed/      (BM-K/KoSimCSE-bert)
-# OCR: PaddleOCR 한국어 det/rec/cls 모델을 받아 ONNX 로 변환해 models/ocr/ 에 배치
+python export_kor_unsmile.py   # models/kor_unsmile/ (smilegate-ai/kor_unsmile)
+python export_kosimcse.py      # models/kor_embed/   (BM-K/KoSimCSE-bert)
+# OCR은 PaddleOCR 한국어 det/rec/cls 모델을 받아 ONNX로 바꾼 뒤 models/ocr/에 둡니다.
 ```
 
-## 모델 없이 쓰기
-모델이 없어도 엔진은 정상 동작하며, 딥러닝/AI OCR 계열 함수만 빈 값을 돌려줍니다.
-- `TextClsAvailable()` / `TextNNAvailable()` → 0
-- `OcrImageAI()` → 빈 문자열 (Windows 내장 `OcrImage()`는 모델 없이 동작)
+## 모델 없이 쓰는 경우
 
-`onnxruntime.dll`은 엔진 옆에 있어야 합니다(지연 로드). 이 역시 Releases의 엔진 묶음에 포함됩니다.
+모델이 없어도 엔진은 정상으로 돌아가고, 딥러닝을 쓰는 함수만 빈 값을 돌려줍니다. `TextClsAvailable()`과 `TextNNAvailable()`은 0을, `OcrImageAI()`는 빈 문자열을 돌려줍니다. Windows에 들어 있는 OCR을 쓰는 `OcrImage()`는 모델 없이도 동작합니다. `onnxruntime.dll`은 필요할 때 불러오므로 엔진과 같은 폴더에 있어야 하고, 릴리스의 엔진 묶음에 들어 있습니다.
 
-> 위 라이선스는 2026-11 확인 기준입니다. 재배포 전 각 모델 페이지에서 변경 여부를 한 번 더
-> 확인하세요. kor_unsmile 모델카드에는 라이선스 태그가 비어 있을 수 있으나, Smilegate의
-> 공식 저장소 고지(소스·모델 Apache-2.0)를 근거로 합니다.
+라이선스는 바뀔 수 있으니, 다시 배포하기 전에 각 모델 페이지를 한 번 더 확인해 주세요.

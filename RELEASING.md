@@ -1,47 +1,28 @@
-# 배포(Release) 가이드
+# 릴리스 만드는 법
 
-이 리포에는 **소스·문서·예제만** 커밋합니다. 빌드 산출물과 대용량 바이너리는
-`.gitignore`로 제외하고, 실행 파일·설치 파일·모델은 **GitHub Releases**로 올립니다.
-(GitHub는 100MB 초과 파일을 거부하고, 모델/설치파일은 리포를 수백 MB로 불립니다.)
+저장소에는 소스와 문서, 예제만 올립니다. GitHub는 100MB가 넘는 파일을 받지 않고, 모델이나 설치 프로그램까지 넣으면 저장소가 수백 MB로 커지기 때문입니다. 빌드한 실행 파일과 설치 프로그램, 모델은 `.gitignore`로 빼 두고 GitHub Releases에 올립니다.
 
-## Releases에 올리는 것
-| 파일 | 크기(대략) | 비고 |
-|---|---|---|
-| `AutoHotkeyWeb_Setup_<ver>.exe` | ~166MB | 설치 프로그램(엔진+컴파일러+문서+예제, 모델은 선택 구성요소) |
-| `AutoHotkeyWeb-engine-<ver>.zip` | ~20MB | `AutoHotkeyWeb.exe` + `onnxruntime.dll` + `compiler\` + `Lib\` (모델 없이 쓰는 최소 묶음) |
-| `models-<ver>.zip` | ~230MB | `models\` 전체 (한글 OCR + kor_unsmile + kor_embed). 라이선스는 `MODELS.md` |
+릴리스마다 올리는 파일은 세 가지입니다. 설치 프로그램 `AutoHotkeyWeb_Setup_<엔진버전>_<빌드>.exe`(약 170MB)는 엔진과 컴파일러, 도움말, 예제를 담고 있고 모델은 설치할 때 고를 수 있습니다. `AutoHotkeyWeb-engine-<버전>.zip`(약 9MB)은 설치하지 않고 바로 쓰는 최소 묶음으로, `AutoHotkeyWeb.exe`와 `onnxruntime.dll`, `compiler\`, `Lib\`가 들어 있습니다. `models-<버전>.zip`(약 160MB)은 `models\` 폴더 전체이고 라이선스는 [MODELS.md](MODELS.md)에 있습니다. 모델을 따로 묶어 두면 필요 없는 사람은 엔진만 받으면 되고, 모델 라이선스 고지도 한곳에서 관리할 수 있습니다.
 
-> 모델을 별도 zip으로 나누면, 모델이 필요 없는 사용자는 엔진만 받을 수 있고
-> 모델 재배포 라이선스 고지도 한곳(`MODELS.md`)으로 모읍니다.
+## 소스에서 전부 빌드하기
 
-## 소스에서 전체 빌드하기
 ```bat
-REM 0) WebView2 SDK (최초 1회) — third_party\webview2 생성
+REM WebView2 SDK (처음 한 번)
 powershell -ExecutionPolicy Bypass -File fetch_webview2.ps1
 
-REM 0-2) (선택) ONNX Runtime SDK — 딥러닝(TextCls/TextNN)·AI OCR 을 포함하려면 필요.
-REM     third_party\onnxruntime\{include, lib\onnxruntime.lib} 에 배치하고
-REM     onnxruntime.dll 을 엔진 옆에 둡니다. 현재 배포본은 onnxruntime 1.29(API 29, MIT) 사용.
-REM     SDK 가 없으면 build.bat 이 자동으로 EnableOnnx=false 로 빌드합니다(딥러닝/AI OCR 만 빠지고
-REM     나머지 전 기능은 그대로). 수동 지정도 가능: msbuild ... /p:EnableOnnx=false
-
-REM 1) 엔진 (x64 Native Tools Command Prompt for VS 2022)
+REM 엔진 (x64 Native Tools Command Prompt for VS 2022)
 build.bat
-REM -> AutoHotkeyWeb.exe  (ONNX SDK 유무를 자동 감지)
 
-REM 2) Self-contained 베이스 + 컴파일러 (ONNX SDK 없으면 /p:EnableOnnx=false 추가)
+REM 컴파일러가 쓰는 베이스(.bin)와 컴파일러, 설치 마법사 스텁
 msbuild engine_src\AutoHotkeyx.sln /t:AutoHotkeyx /p:Configuration=Self-contained /p:Platform=x64 /p:IntDir=C:\ahkweb_build\obj_sc\ /p:LinkIncremental=false /p:TreatLinkerWarningAsErrors=false
 cd compiler && build_compiler.bat
 
-REM 3) 설치 파일 (Inno Setup 6)
+REM 설치 프로그램 (Inno Setup 6)
 cd installer && build_installer.bat
 ```
 
-> Google Drive/OneDrive 동기화 폴더에서 빌드하면 `.ipdb` 잠금(LNK1257)이 납니다.
-> `IntDir`을 로컬 경로(`C:\ahkweb_build`)로 지정하세요.
+딥러닝 기능과 AI OCR을 넣으려면 ONNX Runtime SDK를 `third_party\onnxruntime\`에 `include`와 `lib\onnxruntime.lib`로 두고 `onnxruntime.dll`을 엔진 옆에 둡니다. 지금 배포본은 ONNX Runtime 1.29(MIT)를 씁니다. SDK가 없으면 `build.bat`이 딥러닝 기능만 빼고 빌드하고, Self-contained 빌드에는 `/p:EnableOnnx=false`를 붙이면 됩니다. Self-contained 구성은 `.vcxproj`가 아니라 `.sln`으로 빌드해야 합니다. Google Drive나 OneDrive처럼 동기화되는 폴더에서 빌드하면 링커가 LNK1257로 실패하니 `IntDir`을 로컬 경로로 지정하세요.
 
-## 태그/릴리스 체크리스트
-1. `README.md`·`HANDOFF.md`의 버전 문자열 확인
-2. 엔진→`.bin`→컴파일러→설치파일 순으로 빌드, 스모크 테스트(`tests\features\ext_chain_test.ahk`) 통과
-3. `git tag v<ver>` → push → GitHub에서 Release 생성
-4. 위 표의 zip/exe 3종 첨부, 본문에 변경점과 `MODELS.md` 링크
+## 릴리스 순서
+
+먼저 `engine_src/source/ahkweb_version.h`의 `AHKWEB_BUILD`와 `installer/AutoHotkeyWeb.iss`의 `AppBuild`를 같은 값으로 올리고, CHANGELOG에 새 항목을 씁니다. README의 빌드 배지도 같이 고칩니다. 그다음 엔진, `.bin`, 컴파일러, 설치 프로그램 순서로 빌드하고 `tests\features\ext_chain_test.ahk`와 `tests\compiler\` 테스트를 돌려 모두 통과하는지 확인합니다. 문제가 없으면 `v<엔진버전>-<빌드>` 형식으로 태그를 붙여 올리고, GitHub에서 릴리스를 만들어 위 세 파일과 SHA-256 값, 바뀐 내용을 적습니다.

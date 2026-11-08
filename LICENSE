@@ -1,44 +1,45 @@
 AutoHotkey Web
-==============
 
-A fork of AutoHotkey v1.1.37.02 (upstream: https://github.com/AutoHotkey/AutoHotkey). Licensed under the GNU General Public License,
-version 2 (GPLv2), the same license as AutoHotkey v1.1.
+AutoHotkey Web is a fork of AutoHotkey v1.1.37.02
+(https://github.com/AutoHotkey/AutoHotkey). It is released under the GNU
+General Public License, version 2, which is the license AutoHotkey v1.1 uses.
+The full text of the license follows this notice.
 
 Copyright (C) AutoHotkey Foundation LLC and the original AutoHotkey authors.
-Copyright (C) AutoHotkey Web contributors (fork-specific additions).
+Copyright (C) AutoHotkey Web contributors, for the changes made in this fork.
 
-Fork-specific additions distributed under this same GPLv2 license:
-  - WebGui / WebGuiGet (WebView2 hybrid UI)
-  - Native toolkit: crypto (SHA/HMAC/AES-GCM/
-    DPAPI/ECDSA), Korean OCR (PaddleOCR ONNX + Windows OCR), HTTP/WebSocket,
-    ZIP, image/QR, string & similarity utilities
-  - Method chaining for strings/arrays/objects + JsonParse/JsonStringify
-  - Deep-learning text classification/training (TextCls*/TextNN*, ONNX)
-  - CDP WebSocket server (WsServer*) and the bundled Cdp.ahk
-  - AhkWeb2Exe single-EXE compiler with obfuscated-script container
+Everything added in this fork is under the same license. That covers the
+WebGui and WebGuiGet commands built on WebView2, the native toolkit (hashing,
+AES-GCM, DPAPI, ECDSA, Korean OCR with PaddleOCR models or Windows OCR, HTTP
+and WebSocket clients, ZIP, image search, QR codes and string helpers), method
+chaining for strings, arrays and objects along with JsonParse and
+JsonStringify, the TextCls and TextNN text classification functions, the
+WsServer CDP server and the bundled Cdp.ahk, and the AhkWeb2Exe compiler
+together with its setup wizard.
 
-Because this is a GPLv2 work, if you distribute a binary built from this source
-(including an AhkWeb2Exe-compiled .exe), you must make the complete corresponding
-source available under GPLv2.
+If you distribute a program built from this source, including an .exe made
+with AhkWeb2Exe, the GPL requires you to make the complete corresponding source
+available under the same license.
 
-THIRD-PARTY COMPONENTS (not covered by this project's GPLv2; see their own terms):
-  - ONNX Runtime (onnxruntime.dll)         - MIT License (Microsoft)
-  - Microsoft Edge WebView2 Loader         - BSD-3-Clause (Microsoft); see third_party/webview2/LICENSE.txt
-                                             (the WebView2 Runtime itself is a separate MS component)
-  - miniz (zlib-style)                     - MIT License
-  - cJSON                                  - MIT License
-  - qrcodegen                              - MIT License
-  - Bundled models (optional, via Releases) - redistributable under their own terms:
-      kor_unsmile (Smilegate AI)        - Apache-2.0
-      KoSimCSE-bert (BM-K)              - CC BY-SA 4.0 (attribution + share-alike)
-      PP-OCRv5 Korean (PaddlePaddle)    - Apache-2.0
-    See MODELS.md for sources, exact terms and attribution text.
+A few components shipped with AutoHotkey Web are not part of this project and
+keep their own licenses. Microsoft releases ONNX Runtime (onnxruntime.dll)
+under the MIT License and the WebView2 loader under BSD-3-Clause (see
+third_party/webview2/LICENSE.txt); the WebView2 Runtime itself is installed
+separately by Windows or by Microsoft's installer. miniz, cJSON and qrcodegen
+are MIT licensed.
 
-The "AutoHotkey" name is a trademark of its respective owner. This fork is not
-affiliated with or endorsed by the AutoHotkey project. Confirm trademark use
-before redistributing under any name that includes "AutoHotkey".
+The optional model files offered on the Releases page have their own terms as
+well. kor_unsmile from Smilegate AI and the Korean PP-OCRv5 models from
+PaddlePaddle are Apache-2.0. KoSimCSE-bert from BM-K is CC BY-SA 4.0, which
+asks for attribution and for modified versions to be shared under the same
+license. MODELS.md has the sources and the attribution text.
 
-NO WARRANTY. See sections 11 and 12 of the GPLv2 below.
+"AutoHotkey" is a trademark of its owner. This fork is not affiliated with or
+endorsed by the AutoHotkey project, so check the trademark terms before
+redistributing it under a name that contains "AutoHotkey".
+
+There is no warranty. Sections 11 and 12 of the license below explain this in
+full.
 
 ============================================================================
                     GNU GENERAL PUBLIC LICENSE

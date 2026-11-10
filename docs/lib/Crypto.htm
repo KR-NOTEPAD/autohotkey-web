@@ -61,7 +61,7 @@ MsgBox % DecryptPassword(t, pw)
 
 kp := StrSplit(EcdsaKeyPair(), ":")
 sig := EcdsaSign("release-1.2.zip:" SHA256File("release-1.2.zip"), kp[1])</pre>
-<p>전체 예제: <code>examples\05_암호화\crypto_basics.ahk</code>, <code>file_vault.ahk</code>(폴더 금고 + SHA-256 무결성 + JSON 목록)</p>
+<p>전체 예제: <code>examples\05_암호화\crypto_basics.ahkw</code>, <code>file_vault.ahkw</code>(폴더 금고 + SHA-256 무결성 + JSON 목록)</p>
 <div class="note">비밀번호를 스크립트에 하드코딩하지 마세요. 꼭 저장해야 하면 <code>DpapiProtect</code>로 감싸 두는 것을 권장합니다.</div>
 
 <h2 id="related">관련</h2>

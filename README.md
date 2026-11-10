@@ -25,8 +25,8 @@ AutoHotkey Web은 [AutoHotkey v1.1.37.02](https://github.com/AutoHotkey/AutoHotk
 [Releases](https://github.com/KR-NOTEPAD/autohotkey-web/releases)에서 설치 프로그램을 받아 실행하면 엔진, 컴파일러, 도움말이 설치되고 `.ahkw` 파일 연결과 SciTE4 설정까지 끝납니다. 탐색기에서 마우스 오른쪽 버튼을 누르고 새로 만들기를 고르면 "AutoHotkey Web Script"가 생기고, SciTE4에서는 F5로 실행, F7로 디버그, Ctrl+F7로 컴파일할 수 있습니다.
 
 ```bat
-AutoHotkeyWeb.exe myapp.ahk
-compiler\AhkWeb2Exe.exe /in myapp.ahk /out myapp.exe /icon myapp.ico
+AutoHotkeyWeb.exe myapp.ahkw
+compiler\AhkWeb2Exe.exe /in myapp.ahkw /out myapp.exe /icon myapp.ico
 ```
 
 `AhkWeb2Exe.exe`를 인자 없이 실행하면 Ahk2Exe처럼 컴파일러 창이 뜹니다. 창에서 아이콘과 버전 정보를 넣고, 함께 배포할 파일을 고르고, 원하면 설치 프로그램(Setup.exe)까지 같이 만들 수 있습니다. 스크립트에 지시어를 적어 두는 방법도 Ahk2Exe와 같습니다. 스크립트에 적은 값이 창에서 넣은 값보다 우선합니다.

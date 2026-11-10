@@ -5,7 +5,7 @@
 ;
 ;  사용 함수(엔진 내장): EncryptFile / DecryptFile / SHA256File / FileRecycle /
 ;                        JsonStringify / JsonParse / 배열 메소드 체이닝
-;  실행: AutoHotkeyWeb.exe file_vault.ahk
+;  실행: AutoHotkeyWeb.exe file_vault.ahkw
 ; ============================================================================
 #NoEnv
 #SingleInstance Force

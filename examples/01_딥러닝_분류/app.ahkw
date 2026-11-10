@@ -5,7 +5,7 @@
 ;
 ;  의존성: 엔진 내장 TextCls* 함수 + onnxruntime.dll + models\kor_unsmile.
 ;          (외부 플러그인 전혀 필요 없음)
-;  실행:   AutoHotkeyWeb.exe app.ahk
+;  실행:   AutoHotkeyWeb.exe app.ahkw
 ; ============================================================================
 #NoEnv
 #SingleInstance Force

@@ -5,7 +5,7 @@
 ;    3) ZIP 압축/목록/추출 + 파일 인코딩 감지
 ;    4) QR 코드 생성 → 화면에 띄운 뒤 ImageSearchAll 로 다시 찾기
 ;    5) 클립보드 이미지 저장
-;  실행: AutoHotkeyWeb.exe demo.ahk   (인터넷 연결 필요: 1, 2번)
+;  실행: AutoHotkeyWeb.exe demo.ahkw   (인터넷 연결 필요: 1, 2번)
 ; ============================================================================
 #NoEnv
 #SingleInstance Force

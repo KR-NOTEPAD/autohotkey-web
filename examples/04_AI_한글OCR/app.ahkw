@@ -5,7 +5,7 @@
 ;    Windows OCR : OcrImage / OcrScreen      (모델 불필요, OS 언어팩 사용)
 ;
 ;  의존성: AI OCR 은 onnxruntime.dll + models\ocr (설치 시 '딥러닝 모델' 구성요소).
-;  실행:   AutoHotkeyWeb.exe app.ahk
+;  실행:   AutoHotkeyWeb.exe app.ahkw
 ; ============================================================================
 #NoEnv
 #SingleInstance Force

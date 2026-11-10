@@ -2,7 +2,7 @@
 ;  AutoHotkey Web 예제 5-1 - 암호화 기초 (전부 엔진 내장, #Include / DLL 불필요)
 ;  해시 · HMAC · 인코딩 · AES-256-GCM 문자열 암호화 · 비밀번호 해시 · DPAPI ·
 ;  ECDSA 전자서명 · 보안 난수를 한 화면에서 확인합니다.
-;  실행: AutoHotkeyWeb.exe crypto_basics.ahk
+;  실행: AutoHotkeyWeb.exe crypto_basics.ahkw
 ; ============================================================================
 #NoEnv
 #SingleInstance Force

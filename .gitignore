@@ -71,3 +71,5 @@ desktop.ini
 # 내부 작업노트(개인 경로/미구현 목록 포함) - 공개 리포에서 제외
 HANDOFF.md
 GAPS.md
+# compiler test outputs
+tests/compiler/out/
